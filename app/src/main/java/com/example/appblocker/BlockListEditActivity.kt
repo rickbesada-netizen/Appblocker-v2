@@ -76,15 +76,11 @@ class BlockListEditActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val requestedId = intent.getStringExtra(EXTRA_LIST_ID)
-        val masterLocked = StrictModeStore.isActive(this) && StrictOptionsStore.isLockBlockingsInApp(this)
-        // This specific list may also have its own independent lock.
-        val thisListLocked = requestedId != null && requestedId != BlockList.QUICK_ID &&
-            ListLocks.isListLocked(this, requestedId)
-        val locked = masterLocked || thisListLocked
+        val locked = StrictModeStore.isActive(this) && StrictOptionsStore.isLockBlockingsInApp(this)
         val editingExisting = requestedId != null &&
             (requestedId != BlockList.QUICK_ID || QuickBlockStore.isRunning(this))
-        // Strict Mode / per-list lock: editing an existing list is allowed but
-        // ADD-ONLY - you can make it block more, never less.
+        // Strict Mode: editing an existing list is allowed but ADD-ONLY -
+        // you can make it block more, never less.
         addOnly = locked && editingExisting
 
         setContentView(R.layout.activity_block_list_edit)

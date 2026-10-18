@@ -2,10 +2,10 @@ package com.example.appblocker
 
 import android.content.Context
 
-// Tracks whether a "Strict Mode" lock is active. There is one MASTER lock
-// (scope = "") plus an independent lock per block list and for the adult filter
-// (see ListLocks). While a lock is active, the things it guards can only be made
-// stricter, never weaker, until that specific lock is deactivated.
+// Tracks whether Strict Mode is active. There is ONE central Strict Mode for
+// the whole app (controlled from the Strict tab). While it's on, blockings,
+// settings and permissions can only be made stricter, never weaker, until it's
+// deactivated with the chosen unlock method.
 object StrictModeStore {
 
     private const val PREFS_NAME = "app_blocker_prefs"
@@ -14,7 +14,8 @@ object StrictModeStore {
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // scope "" = the master lock; "_list_<id>" / "_adult_" = an independent lock.
+    // The central lock uses the default scope (""). The optional scope param is
+    // retained only so the unlock stores stay signature-compatible.
     private fun key(scope: String) = KEY_STRICT_MODE_ACTIVE + scope
 
     fun isActive(context: Context, scope: String = ""): Boolean =

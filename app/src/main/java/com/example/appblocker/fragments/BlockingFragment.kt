@@ -25,8 +25,6 @@ import com.example.appblocker.BlockList
 import com.example.appblocker.BlockListEditActivity
 import com.example.appblocker.BlockListStore
 import com.example.appblocker.BlockOverlayManager
-import com.example.appblocker.ListLockActivity
-import com.example.appblocker.ListLocks
 import com.example.appblocker.PauseStore
 import com.example.appblocker.PermissionUtils
 import com.example.appblocker.QuickBlockStore
@@ -226,17 +224,9 @@ class BlockingFragment : Fragment() {
         val mainSwitch = view.findViewById<SwitchCompat>(R.id.adultSwitch)
         val subSwitch = view.findViewById<SwitchCompat>(R.id.adultUnsupportedSwitch)
 
-        view.findViewById<TextView>(R.id.adultLock).setOnClickListener {
-            startActivity(
-                Intent(requireContext(), ListLockActivity::class.java)
-                    .putExtra(ListLockActivity.EXTRA_SCOPE, ListLocks.ADULT_SCOPE)
-                    .putExtra(ListLockActivity.EXTRA_TITLE, "Adult content filter")
-            )
-        }
-
         mainSwitch.setOnCheckedChangeListener { _, isChecked ->
-            // Strict Mode / adult lock: can turn the filter ON, never OFF.
-            if (!isChecked && (StrictModeStore.freezeOn(context, true) || ListLocks.isAdultLocked(context))) {
+            // Strict Mode: can turn the filter ON, never OFF.
+            if (!isChecked && StrictModeStore.freezeOn(context, true)) {
                 mainSwitch.isChecked = true
                 toastLocked()
                 return@setOnCheckedChangeListener
@@ -249,7 +239,7 @@ class BlockingFragment : Fragment() {
             renderAdult(view)
         }
         subSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (!isChecked && (StrictModeStore.freezeOn(context, AdultBlockStore.isEnabled(context)) || ListLocks.isAdultLocked(context))) {
+            if (!isChecked && StrictModeStore.freezeOn(context, AdultBlockStore.isEnabled(context))) {
                 subSwitch.isChecked = true
                 toastLocked()
                 return@setOnCheckedChangeListener
@@ -261,16 +251,14 @@ class BlockingFragment : Fragment() {
     private fun renderAdult(view: View) {
         val context = requireContext()
         val on = AdultBlockStore.isEnabled(context)
-        val adultLocked = ListLocks.isAdultLocked(context)
         val mainSwitch = view.findViewById<SwitchCompat>(R.id.adultSwitch)
         val subSwitch = view.findViewById<SwitchCompat>(R.id.adultUnsupportedSwitch)
         mainSwitch.isChecked = on
-        // Frozen if it was already on when the master lock began, or its own lock is on.
-        mainSwitch.isEnabled = !StrictModeStore.freezeOn(context, on) && !adultLocked
-        view.findViewById<TextView>(R.id.adultLock).text = if (adultLocked) "🔒" else "🔓"
+        // Frozen only if it was already on when Strict Mode began.
+        mainSwitch.isEnabled = !StrictModeStore.freezeOn(context, on)
         view.findViewById<View>(R.id.adultUnsupportedRow).visibility = if (on) View.VISIBLE else View.GONE
         subSwitch.isChecked = AdultBlockStore.blockUnsupportedBrowsers(context)
-        subSwitch.isEnabled = !StrictModeStore.freezeOn(context, on && subSwitch.isChecked) && !adultLocked
+        subSwitch.isEnabled = !StrictModeStore.freezeOn(context, on && subSwitch.isChecked)
     }
 
     // ----- Breaks -----
@@ -326,7 +314,7 @@ class BlockingFragment : Fragment() {
         view.findViewById<TextView>(R.id.emptyListsText).visibility = if (lists.isEmpty()) View.VISIBLE else View.GONE
 
         val inflater = LayoutInflater.from(context)
-        val masterLocked = isLocked()
+        val locked = isLocked()
         for (list in lists) {
             val card = inflater.inflate(R.layout.item_block_list, container, false)
             card.findViewById<TextView>(R.id.listName).text = list.displayName()
@@ -334,27 +322,12 @@ class BlockingFragment : Fragment() {
             card.findViewById<TextView>(R.id.listSchedule).text = ScheduleFormat.summary(list)
             bindStatus(card.findViewById(R.id.listStatus), list)
 
-            // This list is frozen if its own lock OR the master lock is on.
-            val listLockOn = ListLocks.isListLocked(context, list.id)
-            val frozen = masterLocked || listLockOn
-
-            // Per-list lock button.
-            val lockBtn = card.findViewById<TextView>(R.id.listLock)
-            lockBtn.text = if (listLockOn) "🔒" else "🔓"
-            lockBtn.setOnClickListener {
-                startActivity(
-                    Intent(requireContext(), ListLockActivity::class.java)
-                        .putExtra(ListLockActivity.EXTRA_SCOPE, ListLocks.scopeFor(list.id))
-                        .putExtra(ListLockActivity.EXTRA_TITLE, list.displayName())
-                )
-            }
-
             val switch = card.findViewById<SwitchCompat>(R.id.listSwitch)
             switch.isChecked = list.enabled
-            // A list that's off can be switched on, never off, while frozen.
-            switch.isEnabled = !frozen || !list.enabled
+            // Strict Mode: a list that's off can be switched on, never off.
+            switch.isEnabled = !locked || !list.enabled
             switch.setOnCheckedChangeListener { _, isChecked ->
-                if (!isChecked && (masterLocked || ListLocks.isListLocked(context, list.id))) {
+                if (!isChecked && isLocked()) {
                     switch.isChecked = true
                     toastLocked()
                     return@setOnCheckedChangeListener

@@ -56,20 +56,10 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/listLock"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:padding="6dp"
-            android:text="🔓"
-            android:textSize="20sp" />
-
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/listSwitch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="4dp" />
+            android:layout_marginStart="12dp" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -53,9 +53,9 @@ class SelectOptionsActivity : AppCompatActivity() {
 
         buildOptionRows()
 
-        // Loosening the rules while any lock is on would defeat the point.
-        if (ListLocks.anyLockActive(this)) {
-            android.widget.Toast.makeText(this, "A lock is on: options can be turned on, not off", android.widget.Toast.LENGTH_LONG).show()
+        // Loosening the rules mid-Strict-Mode would defeat the point.
+        if (StrictModeStore.isActive(this)) {
+            android.widget.Toast.makeText(this, "Strict Mode is on: options can be turned on, not off", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
@@ -121,15 +121,15 @@ class SelectOptionsActivity : AppCompatActivity() {
 
             val switch = itemView.findViewById<SwitchCompat>(R.id.optionSwitch)
             switch.isChecked = row.isChecked(this)
-            // Frozen only if it was already ON when a lock (master or any list) started.
-            switch.isEnabled = !(switch.isChecked && ListLocks.anyLockActive(this))
+            // Frozen only if it was already ON when Strict Mode started.
+            switch.isEnabled = !StrictModeStore.freezeOn(this, switch.isChecked)
             switch.setOnCheckedChangeListener { view, checked ->
-                if (!checked && ListLocks.anyLockActive(this)) {
+                if (!checked && StrictModeStore.isActive(this)) {
                     view.isChecked = true
                     return@setOnCheckedChangeListener
                 }
                 row.onChanged(this, checked)
-                if (checked && ListLocks.anyLockActive(this)) view.isEnabled = false
+                if (checked && StrictModeStore.isActive(this)) view.isEnabled = false
             }
 
             if (row.title == "Disable AppBlocker uninstalling") {

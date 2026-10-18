@@ -33,9 +33,9 @@ run it. Windows SmartScreen may warn because the installer isn't code-signed yet
 
 ## Features
 - Block apps and websites, with allow-lists and per-site exceptions.
-- **Independent Strict locks** per block list (and the adult filter) — unlocking
-  one doesn't unlock the others; the app can't be uninstalled until every lock
-  is off.
+- **One central Strict Mode** (Strict tab) that locks all your blockings,
+  settings and permissions, with your chosen unlock method; the app can't be
+  uninstalled while it's on.
 - Adult content filter.
 - Android anti-bypass hardening (split-screen, recent apps, device-admin,
   Settings tamper screens).

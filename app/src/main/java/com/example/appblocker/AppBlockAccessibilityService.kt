@@ -337,10 +337,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
     // Returns true if it kicked the user out (caller should stop processing).
     private fun enforceStrictScreens(event: AccessibilityEvent, pkg: String): Boolean {
         val context = applicationContext
-        // Uninstall / recents / split protection stays on while ANY lock is
-        // active - the master lock OR any per-list lock OR the adult lock - so
-        // the app can't be removed until every lock has been turned off.
-        if (!ListLocks.anyLockActive(context)) return false
+        if (!StrictModeStore.isActive(context)) return false
 
         if (StrictOptionsStore.isBlockRecentApps(context) &&
             event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
@@ -368,7 +365,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
     // it can be turned back ON.
     private fun checkTamper(pkg: String) {
         val context = applicationContext
-        if (!ListLocks.anyLockActive(context)) return
+        if (!StrictModeStore.isActive(context)) return
         if (!StrictOptionsStore.isBlockDeviceSettings(context)) return
         if (!PermissionUtils.hasOverlayPermission(context)) return
         val root = rootInActiveWindow ?: return
@@ -496,7 +493,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         if (!power.isInteractive) return
         UsageTracker.tick(applicationContext, now)
-        if (ListLocks.anyLockActive(applicationContext) &&
+        if (StrictModeStore.isActive(applicationContext) &&
             StrictOptionsStore.isBlockSplitScreen(applicationContext) && protectedAppInSplit()
         ) {
             kickOut("Settings can't be used in split screen while Strict Mode is on")
