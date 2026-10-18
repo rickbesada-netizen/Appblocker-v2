@@ -209,7 +209,7 @@ function activeNow(list){
     return (days.includes(day)&&now>=s)||(days.includes(prev)&&now<e);
   });
 }
-function lockedList(l){ return (l.strict&&l.strict.enabled) || (state.strict&&state.strict.enabled); }
+function lockedList(l){ return !!(state.strict&&state.strict.enabled); }
 
 function renderLists() {
   const wrap=$('lists'); wrap.innerHTML='';
@@ -223,7 +223,7 @@ function renderLists() {
     let status='<span class="status-off">Off</span>';
     if(l.enabled && activeNow(l)) status='<span class="status-on">● Blocking now</span>';
     else if(l.enabled) status='<span class="status-sched">Scheduled - not active now</span>';
-    const lockBadge = (l.strict&&l.strict.enabled) ? ' · 🔒 Locked' : '';
+    const lockBadge = '';
     card.innerHTML=`<div class="grow">
         <div class="name"></div>
         <div class="sub">${apps} app(s) · ${sites} site(s)${l.scheduleEnabled?' · scheduled':''}${lockBadge}</div>
@@ -262,34 +262,8 @@ function renderEditorRanges(){ renderRangesInto($('ranges'), editing.ranges, ren
 
 function liveList(){ return (state.lists||[]).find(l=>editing && l.id===editing.id); }
 
-function renderListStrict(){
-  const saved = liveList();
-  const statusEl=$('listStrictStatus'); const hint=$('listStrictHint');
-  const lockBtn=$('listLockBtn'); const unlockBtn=$('listUnlockBtn');
-  if(!saved){
-    statusEl.textContent='Not saved yet.';
-    hint.textContent='Save the list first, then you can give it its own Strict Mode.';
-    lockBtn.disabled=true; unlockBtn.disabled=true;
-    return;
-  }
-  lockBtn.disabled=false; unlockBtn.disabled=false;
-  const st=saved.strict||{};
-  const methods=(st.methods||[]);
-  if(st.enabled){
-    { const t=lockTiming(st); statusEl.textContent='🔒 Locked' + (methods.length?(' · unlock: '+methods.join(' + ')):' · no unlock method (off instantly)') + (t?(' · '+t):''); }
-    lockBtn.textContent='Unlock this list';
-    lockBtn.onclick=()=>doDeactivate('list', saved.id);
-    unlockBtn.disabled=true;
-    hint.textContent='';
-  } else {
-    statusEl.textContent='Unlocked' + (methods.length?(' · unlock: '+methods.join(' + ')):' · no unlock method set');
-    lockBtn.textContent='Lock this list';
-    lockBtn.onclick=async()=>{ const r=await api.listStrictActivate(saved.id); if(r.error)alert(r.error); await refresh(); };
-    unlockBtn.disabled=false;
-    unlockBtn.onclick=()=>openUnlock(toCfg(st), async(cfg)=>{ const r=await api.listUnlockConfig(saved.id,cfg); if(r.error){alert(r.error); return false;} await refresh(); return true; });
-    hint.textContent='';
-  }
-}
+// Per-list locks were removed in favour of one central Strict Mode (Strict tab).
+function renderListStrict(){}
 
 $('newListBtn').onclick=()=>openEditor(null);
 $('editorClose').onclick=closeEditor;
@@ -497,14 +471,6 @@ async function renderFrozen(){
 // ---- Adult & Web filter ----
 function renderFilter(){
   $('adultToggle').checked=!!state.adultFilter;
-  const as=state.adultStrict||{};
-  const am=(as.methods||[]);
-  const at=lockTiming(as);
-  $('adultStrictStatus').textContent = as.enabled
-    ? ('🔒 Locked' + (am.length?(' · unlock: '+am.join(' + ')):'') + (at?(' · '+at):''))
-    : ('Unlocked' + (am.length?(' · unlock: '+am.join(' + ')):' · no unlock method set'));
-  $('adultLockBtn').textContent = as.enabled ? 'Unlock filter' : 'Lock filter';
-  $('adultUnlockBtn').disabled = !!as.enabled;
 
   const wf=state.webFilter||{enabled:false, allowedSites:[]};
   $('webToggle').checked=!!wf.enabled;
@@ -514,12 +480,6 @@ function renderFilter(){
     : 'Off: all browsing allowed.';
 }
 $('adultToggle').onchange=async(e)=>{ const r=await api.setAdultFilter(e.target.checked); if(r.error){alert(r.error);e.target.checked=!e.target.checked;} else state=r; renderFilter(); };
-$('adultLockBtn').onclick=async()=>{
-  const as=state.adultStrict||{};
-  if(as.enabled){ await doDeactivate('adult'); }
-  else { const r=await api.adultStrictActivate(); if(r.error)alert(r.error); await refresh(); }
-};
-$('adultUnlockBtn').onclick=()=>openUnlock(toCfg(state.adultStrict), async(cfg)=>{ const r=await api.adultUnlockConfig(cfg); if(r.error){alert(r.error); return false;} await refresh(); return true; });
 $('webToggle').onchange=async(e)=>{
   const sites=$('allowedSites').value.split('\n').map(s=>s.trim()).filter(Boolean);
   const r=await api.setWebFilter(e.target.checked, sites);
@@ -679,8 +639,6 @@ $('enforcementToggle').onchange=async(e)=>{ const r=await api.setEnforcement(e.t
 function activeLockNames(){
   const names=[];
   if(state.strict && state.strict.enabled) names.push('Strict Mode');
-  if(state.adultStrict && state.adultStrict.enabled) names.push('Adult/Web filter lock');
-  (state.lists||[]).forEach(l=>{ if(l.strict && l.strict.enabled) names.push('"'+(l.name||'Untitled')+'" list lock'); });
   return names;
 }
 

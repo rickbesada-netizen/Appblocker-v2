@@ -31,25 +31,14 @@ let tray = null;
 let store = null;
 let engine = null;
 
-// Any lock on (global, a list's own, or the adult/web filter's own)?
+// One central Strict Mode governs everything on this device.
 function anyLockOn() {
-  const s = store.get();
-  if (lock.isOn(s.strict)) return true;
-  if (lock.isOn(s.adultStrict)) return true;
-  return (s.lists || []).some(l => lock.isOn(l.strict));
+  return lock.isOn(store.get().strict);
 }
 
-// Names of everything currently locked, so error messages can say exactly which
-// lock is holding and where to turn it off.
+// Names of what's currently locked, for error messages.
 function lockBlockers() {
-  const s = store.get();
-  const out = [];
-  if (lock.isOn(s.strict)) out.push('Strict Mode (Strict Mode tab)');
-  if (lock.isOn(s.adultStrict)) out.push('the Adult/Web filter lock (Adult & Web filter tab)');
-  for (const l of (s.lists || [])) {
-    if (lock.isOn(l.strict)) out.push('the "' + (l.name || 'Untitled') + '" list lock (open that list)');
-  }
-  return out;
+  return lock.isOn(store.get().strict) ? ['Strict Mode (Strict Mode tab)'] : [];
 }
 
 // ---- Cloud sync helpers (block definitions + remote Strict commands) ----
@@ -108,7 +97,8 @@ function handleCommand(c) {
 
 // Is a particular list locked (its own strict, or the global strict)?
 function listLocked(list) {
-  return lock.isOn(list && list.strict) || lock.isOn(store.get().strict);
+  // Central Strict Mode locks every list.
+  return lock.isOn(store.get().strict);
 }
 
 // Would `after` block less than `before`? (add-only guard for locked lists.)
@@ -399,7 +389,7 @@ if (gotLock) app.whenReady().then(() => {
 
   // ----- Adult filter (hosts) + its own strict -----
   ipcMain.handle('adult:set', (_e, on) => {
-    if (!on && lock.isOn(store.get().adultStrict)) return { error: 'Locked: the Adult/Web filter lock is on - press "Unlock filter" first.' };
+    if (!on && lock.isOn(store.get().strict)) return { error: 'Locked by Strict Mode - turn it off first (Strict Mode tab).' };
     const s = store.get(); s.adultFilter = !!on; store.set(s); engine.tick();
     return store.get();
   });
@@ -427,11 +417,11 @@ if (gotLock) app.whenReady().then(() => {
   // ----- Web allow-list filter -----
   ipcMain.handle('webfilter:set', (_e, { enabled, allowedSites }) => {
     const s = store.get();
-    const locked = lock.isOn(s.adultStrict);
+    const locked = lock.isOn(s.strict);
     const cur = s.webFilter || { enabled: false, allowedSites: [] };
     if (locked) {
       // Add-only while locked: can't turn off, can't add new allowed sites.
-      if (enabled === false && cur.enabled) return { error: 'Locked: the Adult/Web filter lock is on - press "Unlock filter" first.' };
+      if (enabled === false && cur.enabled) return { error: 'Locked by Strict Mode - turn it off first (Strict Mode tab).' };
       const curSet = new Set(cur.allowedSites || []);
       const added = (allowedSites || []).some(x => !curSet.has(x));
       if (added) return { error: 'Locked: you can remove allowed sites, but not add new ones' };

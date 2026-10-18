@@ -39,14 +39,7 @@
       <div class="card">
         <label class="switch-row"><span>Adult content filter (blocks millions of adult sites in Chrome, Edge, Brave &amp; Firefox)</span>
           <input id="adultToggle" type="checkbox" /></label>
-        <p class="muted">Makes your browsers use family-safe DNS (Cloudflare for Families) and forces Google SafeSearch on. It doesn't change your PC's network settings, so it can't slow down or cut off the internet. Independent of block lists.</p>
-        <div class="row-between mt">
-          <span id="adultStrictStatus" class="muted"></span>
-          <span>
-            <button id="adultUnlockBtn" class="btn-outline small">Unlock method</button>
-            <button id="adultLockBtn" class="btn-outline small">Lock filter</button>
-          </span>
-        </div>
+        <p class="muted">Makes your browsers use family-safe DNS (Cloudflare for Families) and forces Google SafeSearch on. It doesn't change your PC's network settings, so it can't slow down or cut off the internet. Locked by Strict Mode when it's on.</p>
       </div>
 
       <div class="card">
@@ -303,19 +296,6 @@
       <div id="schedBox" class="hidden">
         <div id="ranges"></div>
         <button id="addRange" class="btn-outline small">+ Add time</button>
-      </div>
-
-      <!-- Per-list Strict Mode -->
-      <div id="listStrictSection" class="card mt">
-        <h3>Strict Mode for this list</h3>
-        <p class="muted">Locks just this list (can't be turned off, weakened or deleted) - separate from the big
-          Strict Mode. Uses this list's own unlock method.</p>
-        <div id="listStrictStatus" class="muted"></div>
-        <div class="row-between mt">
-          <button id="listUnlockBtn" class="btn-outline small">Unlock method</button>
-          <button id="listLockBtn" class="btn-outline small">Lock this list</button>
-        </div>
-        <p id="listStrictHint" class="muted"></p>
       </div>
 
       <div class="row-between mt">

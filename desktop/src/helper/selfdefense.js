@@ -7,14 +7,12 @@ const { execFile } = require('child_process');
 const path = require('path');
 const lock = require('../shared/lock');
 
-// "Locked" = the big Strict Mode, any list's own lock, or the adult/web filter
-// lock is on. In the weekly buffer the user turns Strict Mode off, so this goes
-// false and every protection below is released on the next tick.
+// "Locked" = the one central Strict Mode is on. In the weekly buffer the user
+// turns Strict Mode off, so this goes false and every protection below is
+// released on the next tick.
 function anyLockOn(cfg) {
   if (!cfg) return false;
-  if (lock.isOn(cfg.strict)) return true;
-  if (lock.isOn(cfg.adultStrict)) return true;
-  return (cfg.lists || []).some(l => lock.isOn(l.strict));
+  return lock.isOn(cfg.strict);
 }
 
 const SCRIPTS = path.join(__dirname, 'scripts');
