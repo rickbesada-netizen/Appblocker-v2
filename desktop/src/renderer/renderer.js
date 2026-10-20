@@ -474,17 +474,17 @@ if($('wwSave')) $('wwSave').onclick=async()=>{
   if(r.error){ alert(r.error); } else { state=r; renderWeekly(); alert('Weekly window saved.'); }
 };
 
-// ---- Frozen Turkey: freeze a Windows account ----
+// ---- Scheduled Sign-Out: sign a Windows account out on a schedule ----
 let frRanges=[];
 let frUsersLoaded=false;
 function renderFrRanges(){ if($('frRanges')) renderRangesInto($('frRanges'), frRanges, renderFrRanges); }
 if($('frAddRangeBtn')) $('frAddRangeBtn').onclick=()=>{ frRanges.push(defaultRange()); renderFrRanges(); };
 if($('frSave')) $('frSave').onclick=async()=>{
   const u=$('frUser').value;
-  if(!u){ alert('Pick a Windows account to freeze.'); return; }
+  if(!u){ alert('Pick a Windows account to sign out.'); return; }
   const accounts = frRanges.length ? [{username:u, enabled:true, ranges:frRanges}] : [];
   const r=await api.setFrozenAccounts(accounts);
-  if(r.error){ alert(r.error); } else { state=r; renderFrozen(); alert(frRanges.length?('Freeze saved for '+u):'Freeze cleared.'); }
+  if(r.error){ alert(r.error); } else { state=r; renderFrozen(); alert(frRanges.length?('Sign-out schedule saved for '+u):'Sign-out schedule cleared.'); }
 };
 async function renderFrozen(){
   if(!$('frUser')) return;
@@ -499,7 +499,7 @@ async function renderFrozen(){
     renderFrRanges();
   }
   const fa=(state.frozenAccounts||[])[0];
-  $('frStatus').textContent = fa ? ('Freezing "'+fa.username+'" on '+(fa.ranges||[]).length+' schedule(s).') : 'No account frozen yet.';
+  $('frStatus').textContent = fa ? ('Signing out "'+fa.username+'" on '+(fa.ranges||[]).length+' schedule(s).') : 'No account set to sign out yet.';
 }
 
 // ---- Adult & Web filter ----

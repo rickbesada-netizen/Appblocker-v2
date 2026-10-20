@@ -19,15 +19,17 @@ function markRange(blocked, range) {
   for (let day = 0; day < 7; day++) {
     if (!days.includes(day)) continue;
     const base = day * MINUTES_PER_DAY;
+    // End is INCLUSIVE: a range that ENDS at 23:59 covers the whole day, so it's
+    // rejected; you must end at 23:58 or earlier to keep a free minute (23:59).
     if (s === e) {
       for (let m = 0; m < MINUTES_PER_DAY; m++) blocked[base + m] = true;       // all day
     } else if (s < e) {
-      for (let m = s; m < e; m++) blocked[base + m] = true;
+      for (let m = s; m <= e; m++) blocked[base + m] = true;
     } else {
-      // crosses midnight: [s,24:00) today, [0,e) tomorrow
+      // crosses midnight: [s,24:00) today, [0,e] tomorrow
       for (let m = s; m < MINUTES_PER_DAY; m++) blocked[base + m] = true;
       const nextBase = ((day + 1) % 7) * MINUTES_PER_DAY;
-      for (let m = 0; m < e; m++) blocked[nextBase + m] = true;
+      for (let m = 0; m <= e; m++) blocked[nextBase + m] = true;
     }
   }
 }

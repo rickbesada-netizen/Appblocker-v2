@@ -23,14 +23,16 @@ object ScheduleGuard {
         for (d in r.days) {
             val idx = (d - 1).coerceIn(0, 6) // Calendar SUNDAY=1 -> 0
             val base = idx * MIN_PER_DAY
+            // End is INCLUSIVE: ending at 23:59 covers the whole day (rejected);
+            // end at 23:58 to keep a free minute (23:59).
             when {
                 s == e -> for (m in 0 until MIN_PER_DAY) blocked[base + m] = true   // all day
-                s < e -> for (m in s until e) blocked[base + m] = true
+                s < e -> for (m in s..e) blocked[base + m] = true
                 else -> {
-                    // crosses midnight: [s,24:00) today, [0,e) next day
+                    // crosses midnight: [s,24:00) today, [0,e] next day
                     for (m in s until MIN_PER_DAY) blocked[base + m] = true
                     val nextBase = ((idx + 1) % 7) * MIN_PER_DAY
-                    for (m in 0 until e) blocked[nextBase + m] = true
+                    for (m in 0..e) blocked[nextBase + m] = true
                 }
             }
         }

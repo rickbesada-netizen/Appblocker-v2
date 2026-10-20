@@ -19,15 +19,17 @@ enum ScheduleGuard {
         for d in r.days {
             let idx = max(0, min(6, d - 1)) // Calendar Sunday=1 -> 0
             let base = idx * minutesPerDay
+            // End is INCLUSIVE: ending at 23:59 covers the whole day (rejected);
+            // end at 23:58 to keep a free minute (23:59).
             if s == e {
                 for m in 0..<minutesPerDay { blocked[base + m] = true } // all day
             } else if s < e {
-                for m in s..<e { blocked[base + m] = true }
+                for m in s...e { blocked[base + m] = true }
             } else {
-                // crosses midnight: [s,24:00) today, [0,e) next day
+                // crosses midnight: [s,24:00) today, [0,e] next day
                 for m in s..<minutesPerDay { blocked[base + m] = true }
                 let nextBase = ((idx + 1) % 7) * minutesPerDay
-                for m in 0..<e { blocked[nextBase + m] = true }
+                for m in 0...e { blocked[nextBase + m] = true }
             }
         }
     }

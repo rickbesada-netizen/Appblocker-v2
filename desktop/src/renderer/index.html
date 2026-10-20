@@ -74,7 +74,7 @@
       <!-- Weekly unlock window -->
       <div class="card">
         <h3>Weekly unlock window</h3>
-        <p class="muted">Pick the one short window each week when Strict Mode and any frozen account can be turned
+        <p class="muted">Pick the one short window each week when Strict Mode and any scheduled sign-out can be turned
           off. Everything stays locked the rest of the week. Minimum 1 minute.</p>
         <label class="switch-row"><span>Only allow unlocking during this weekly window</span>
           <input id="wwEnabled" type="checkbox" /></label>
@@ -94,21 +94,21 @@
         <p id="wwStatus" class="muted" style="margin-top:8px"></p>
       </div>
 
-      <!-- Frozen Turkey: freeze a Windows account -->
+      <!-- Scheduled Sign-Out: sign a Windows account out on a schedule -->
       <div class="card" id="frozenCard">
-        <h3>Freeze a Windows account (Frozen Turkey)</h3>
-        <p class="muted">During a freeze schedule the chosen Windows account is <b>signed out on sight</b> — it
-          can't be used at all. Other accounts still work. The freeze lifts only during your weekly unlock window.
+        <h3>Scheduled Sign-Out (Windows account)</h3>
+        <p class="muted">On the schedule you set, the chosen Windows account is <b>signed out on sight</b> — it
+          can't be used at all. Other accounts still work. It stays signed out until your weekly unlock window.
           Use a <b>separate</b> account from the one that manages AppBlocker.</p>
         <div class="row" style="gap:10px; align-items:flex-end; flex-wrap:wrap">
           <label class="field" style="min-width:180px"><span>Windows account</span>
             <select id="frUser"></select></label>
-          <button id="frAddRangeBtn" class="btn-outline small">+ Add freeze time</button>
+          <button id="frAddRangeBtn" class="btn-outline small">+ Add sign-out time</button>
         </div>
         <div id="frRanges" style="margin-top:10px"></div>
         <div class="row-between mt">
           <span id="frStatus" class="muted"></span>
-          <button id="frSave" class="btn-primary small">Save freeze</button>
+          <button id="frSave" class="btn-primary small">Save</button>
         </div>
       </div>
     </section>
