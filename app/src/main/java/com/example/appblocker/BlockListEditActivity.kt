@@ -56,6 +56,7 @@ class BlockListEditActivity : AppCompatActivity() {
     private val ranges = mutableListOf<TimeRange>()
     private var usageLimit = 0
     private var launchLimit = 0
+    private var originalSnapshot = ""
 
     private lateinit var nameInput: EditText
     private lateinit var websiteInput: EditText
@@ -104,7 +105,7 @@ class BlockListEditActivity : AppCompatActivity() {
             existing == null -> "New block list"
             else -> "Edit block list"
         }
-        findViewById<ImageButton>(R.id.closeButton).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.closeButton).setOnClickListener { leave() }
         val deleteButton = findViewById<ImageButton>(R.id.deleteButton)
         deleteButton.visibility = if (existing != null && !isQuick && !addOnly) View.VISIBLE else View.GONE
         deleteButton.setOnClickListener { confirmDelete() }
@@ -128,6 +129,22 @@ class BlockListEditActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.saveButton).setOnClickListener { save() }
 
         renderAll()
+        originalSnapshot = currentList().toJson().toString()
+    }
+
+    override fun onBackPressed() { leave() }
+
+    // Warn before leaving with unsaved edits.
+    private fun leave() {
+        val changed = currentList().toJson().toString() != originalSnapshot
+        if (!changed) { finish(); return }
+        AlertDialog.Builder(this)
+            .setTitle("Unsaved changes")
+            .setMessage("Save your changes to this list before leaving?")
+            .setPositiveButton("Save") { _, _ -> save() } // save() finishes on success
+            .setNegativeButton("Discard") { _, _ -> finish() }
+            .setNeutralButton("Keep editing", null)
+            .show()
     }
 
     override fun onResume() {
@@ -598,7 +615,8 @@ class BlockListEditActivity : AppCompatActivity() {
         blockNotifications = blockNotifications
     )
 
-    private fun save() {
+    // Returns true if the list was saved, false if validation stopped it.
+    private fun save(): Boolean {
         // Anything typed but not added yet - add it.
         WebsiteUtils.normalizeDomain(websiteInput.text.toString())?.let { websites.add(it) }
         keywordInput.text.toString().trim().lowercase().takeIf { it.length >= 2 }?.let { keywords.add(it) }
@@ -606,23 +624,30 @@ class BlockListEditActivity : AppCompatActivity() {
         val list = currentList()
         if (list.isEmpty()) {
             Toast.makeText(this, "Add at least one app, website or keyword", Toast.LENGTH_SHORT).show()
-            return
+            return false
         }
         // Final backstop for add-only: the new list must still block everything
         // the old one did.
         original?.let { o ->
             if (addOnly && weakensAny(o, list)) {
                 Toast.makeText(this, "Strict Mode: you can only add to this list, not remove from it", Toast.LENGTH_LONG).show()
-                return
+                return false
             }
         }
         if (list.scheduleEnabled && ranges.any { it.days.isEmpty() }) {
             Toast.makeText(this, "Every time range needs at least one day", Toast.LENGTH_SHORT).show()
-            return
+            return false
+        }
+        // Guaranteed free window: never let a schedule seal the whole week.
+        ScheduleGuard.scheduleError(list.scheduleEnabled, list.ranges)?.let {
+            AlertDialog.Builder(this).setTitle("Leave a free minute").setMessage(it)
+                .setPositiveButton("OK", null).show()
+            return false
         }
         BlockListStore.upsert(this, list)
         Toast.makeText(this, "Saved \"${list.displayName()}\"", Toast.LENGTH_SHORT).show()
         finish()
+        return true
     }
 
     private fun confirmDelete() {

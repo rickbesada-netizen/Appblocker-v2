@@ -24,6 +24,7 @@ class StrictScheduleActivity : AppCompatActivity() {
 
     private var scope: String = ""
     private val ranges = mutableListOf<TimeRange>()
+    private var originalJson = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,14 +33,35 @@ class StrictScheduleActivity : AppCompatActivity() {
         scope = intent.getStringExtra(EXTRA_SCOPE) ?: ""
         ranges.addAll(StrictScheduleStore.getRanges(this, scope))
         if (ranges.isEmpty()) ranges.add(TimeRange())
+        originalJson = rangesJson()
 
-        findViewById<ImageButton>(R.id.closeButton).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.closeButton).setOnClickListener { leave() }
         findViewById<MaterialButton>(R.id.addRangeButton).setOnClickListener {
             ranges.add(TimeRange())
             render()
         }
         findViewById<MaterialButton>(R.id.saveButton).setOnClickListener { save() }
         render()
+    }
+
+    override fun onBackPressed() { leave() }
+
+    private fun rangesJson(): String {
+        val arr = org.json.JSONArray()
+        ranges.filter { it.days.isNotEmpty() }.forEach { arr.put(it.toJson()) }
+        return arr.toString()
+    }
+
+    // Warn before leaving with unsaved edits (this is what locks people out).
+    private fun leave() {
+        if (rangesJson() == originalJson) { finish(); return }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Unsaved changes")
+            .setMessage("Save your schedule changes before leaving?")
+            .setPositiveButton("Save") { _, _ -> save() } // save() finishes on success
+            .setNegativeButton("Discard") { _, _ -> finish() }
+            .setNeutralButton("Keep editing", null)
+            .show()
     }
 
     private fun render() {
@@ -126,15 +148,23 @@ class StrictScheduleActivity : AppCompatActivity() {
         TimePickerDialog(this, { _, h, m -> onPicked(h * 60 + m) }, current / 60, current % 60, false).show()
     }
 
-    private fun save() {
+    // Returns true if the schedule was saved, false if validation stopped it.
+    private fun save(): Boolean {
         val valid = ranges.filter { it.days.isNotEmpty() }
         if (valid.isEmpty()) {
             Toast.makeText(this, "Pick at least one day", Toast.LENGTH_SHORT).show()
-            return
+            return false
+        }
+        // Guaranteed free window: a follow-schedules lock must leave a minute to unlock.
+        ScheduleGuard.scheduleError(true, valid)?.let {
+            androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Leave a free minute")
+                .setMessage(it).setPositiveButton("OK", null).show()
+            return false
         }
         StrictScheduleStore.setRanges(this, valid, scope)
         Toast.makeText(this, "Schedule saved", Toast.LENGTH_SHORT).show()
         finish()
+        return true
     }
 
     private fun dp(v: Int): Int =

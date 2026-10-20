@@ -30,6 +30,10 @@ run it. Windows SmartScreen may warn because the installer isn't code-signed yet
   `.github/workflows/build.yml` into the `latest` release.
 - **`desktop/`** — the Windows/macOS desktop app (Electron). Built by
   `.github/workflows/build-windows.yml` into the `windows-latest` release.
+- **`ios/`** — the iOS app (SwiftUI + Family Controls). Source only — build it in
+  Xcode on a Mac with an Apple Developer account (needs the Family Controls
+  entitlement); no cloud build.
+- **`phone-control/`** — the phone-control PWA (remote Strict-Mode control).
 
 ## Features
 - Block apps and websites, with allow-lists and per-site exceptions.

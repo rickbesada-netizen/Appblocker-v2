@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>AppBlocker Remote</title>
+<meta name="theme-color" content="#0d0d14" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<style>
+  :root{
+    --bg:#0b0b12; --panel:#14141d; --line:#23232e; --fg:#e8e8f0; --muted:#9a9ab0;
+    --accent:#4f46e5; --accent2:#0ea5e9; --green:#36c17a; --amber:#e5a53b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+  .wrap{max-width:560px;margin:0 auto;padding:18px 16px 40px}
+  header{display:flex;align-items:center;gap:12px;padding:6px 2px 14px}
+  header img{width:38px;height:38px;border-radius:9px}
+  header h1{font-size:19px;margin:0;font-weight:700}
+  header small{color:var(--muted);display:block;font-weight:400;font-size:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);
+    background:#0f0f17;color:var(--fg);font-size:16px}
+  button{font-size:15px;font-weight:600;border:none;border-radius:10px;padding:11px 16px;cursor:pointer}
+  .primary{background:var(--accent);color:#fff}
+  .ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .right{margin-left:auto}
+  .msg{font-size:13px;color:var(--amber);min-height:18px;margin-top:8px}
+  .dev{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .dev:last-child{border-bottom:none}
+  .dev .name{font-weight:600}
+  .dev .sub{font-size:12px;color:var(--muted)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+  .dot.live{background:var(--green)}
+  .pill{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 9px}
+  .mini{padding:8px 12px;font-size:13px}
+  h2{font-size:15px;margin:0 0 6px}
+  .muted{color:var(--muted);font-size:13px;line-height:1.5}
+  .blocklist li{margin:2px 0}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
+    background:var(--accent);color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;
+    box-shadow:0 6px 24px rgba(0,0,0,.4);opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="icon-192.png" alt="" />
+    <h1>AppBlocker Remote<small>Control your other devices</small></h1>
+  </header>
+
+  <!-- Signed out -->
+  <section id="auth" class="card" hidden>
+    <h2>Sign in</h2>
+    <p class="muted">Use the same account as your laptop app.</p>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" placeholder="you@email.com" />
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+    <div class="msg" id="authMsg"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="ghost" id="signupBtn">Create account</button>
+      <button class="primary right" id="signinBtn">Sign in</button>
+    </div>
+  </section>
+
+  <!-- Signed in -->
+  <section id="app" hidden>
+    <div class="card">
+      <div class="row">
+        <span class="muted">Signed in as <b id="whoami"></b></span>
+        <button class="ghost mini right" id="signoutBtn">Sign out</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Your devices</h2>
+      <div id="devices"></div>
+      <p class="muted" id="devHint" style="margin-top:10px"></p>
+    </div>
+
+    <div class="card">
+      <h2>Your blocks</h2>
+      <p class="muted" id="blocksSummary">Loading…</p>
+      <ul class="blocklist muted" id="blocks"></ul>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(function(){
+  // Same Supabase project as the desktop app (public client values).
+  var URL = "https://witygsuyvkxhmhbjtxnu.supabase.co";
+  var ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpdHlnc3V5dmt4aG1oYmp0eG51Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1ODUyMzEsImV4cCI6MjEwNzE2MTIzMX0.1dDJxkHTHAJPsw1OzbrnleeAIZ-Q-nWdSyad84mwaEA";
+  var sb = window.supabase.createClient(URL, ANON);
+  var $ = function(id){ return document.getElementById(id); };
+  var deviceId = null;
+
+  function store(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){ return null; } }
+  function toast(t){ var el=$('toast'); el.textContent=t; el.classList.add('show'); setTimeout(function(){el.classList.remove('show');},2200); }
+  function ago(iso){ if(!iso) return ''; var s=Math.round((Date.now()-new Date(iso).getTime())/1000);
+    if(s<90) return s+'s ago'; var m=Math.round(s/60); if(m<90) return m+' min ago'; var h=Math.round(m/60); if(h<36) return h+' hr ago'; return Math.round(h/24)+' d ago'; }
+  var ICON={windows:'🪟',macos:'🍎',android:'📱',ios:'📱',web:'🌐',linux:'🐧'};
+
+  async function show(){
+    var u = (await sb.auth.getUser()).data.user;
+    if(!u){ $('auth').hidden=false; $('app').hidden=true; return; }
+    $('auth').hidden=true; $('app').hidden=false;
+    $('whoami').textContent = u.email || '(account)';
+    await registerDevice(u.id);
+    await loadDevices(u.id);
+    await loadBlocks(u.id);
+    subscribe(u.id);
+  }
+
+  async function registerDevice(uid){
+    deviceId = store('ab_device_id');
+    if(deviceId){
+      await sb.from('devices').update({last_seen:new Date().toISOString()}).eq('id',deviceId);
+      return;
+    }
+    var name = 'Phone';
+    try{ if(/android/i.test(navigator.userAgent)) name='Android phone'; else if(/iphone|ipad/i.test(navigator.userAgent)) name='iPhone'; }catch(e){}
+    var r = await sb.from('devices').insert({user_id:uid,name:name,platform:'web'}).select().single();
+    if(r.data){ deviceId=r.data.id; store('ab_device_id',deviceId); }
+  }
+
+  async function loadDevices(uid){
+    var r = await sb.from('devices').select('id,name,platform,last_seen').eq('user_id',uid);
+    var list = (r.data||[]).sort(function(a,b){ return new Date(b.last_seen)-new Date(a.last_seen); });
+    var box = $('devices'); box.innerHTML='';
+    var others = 0;
+    list.forEach(function(d){
+      var isThis = d.id===deviceId;
+      if(!isThis) others++;
+      var live = d.last_seen && (Date.now()-new Date(d.last_seen).getTime() < 180000);
+      var el = document.createElement('div'); el.className='dev';
+      el.innerHTML =
+        '<span class="dot '+(live?'live':'')+'"></span>'+
+        '<span><span class="name">'+(ICON[d.platform]||'💻')+' '+escapeHtml(d.name||'Device')+'</span>'+
+        '<span class="sub">'+(isThis?'this device':('last seen '+ago(d.last_seen)))+'</span></span>';
+      if(!isThis){
+        var wrap=document.createElement('span'); wrap.className='right row';
+        var b1=document.createElement('button'); b1.className='ghost mini'; b1.textContent='Strict on';
+        b1.onclick=function(){ sendCmd('strict_on', d.id, d.name); };
+        var b2=document.createElement('button'); b2.className='ghost mini'; b2.textContent='Lock all';
+        b2.onclick=function(){ sendCmd('lock_all', d.id, d.name); };
+        wrap.appendChild(b1); wrap.appendChild(b2); el.appendChild(wrap);
+      }
+      box.appendChild(el);
+    });
+    $('devHint').textContent = others ? 'Tap a button to arm Strict Mode or lock everything on that device.'
+      : 'No other devices yet. Sign in on your laptop to control it from here.';
+  }
+
+  async function sendCmd(type, target, name){
+    var u=(await sb.auth.getUser()).data.user; if(!u) return;
+    var r = await sb.from('commands').insert({user_id:u.id,target_device:target,type:type});
+    if(r.error){ toast('Failed: '+r.error.message); }
+    else { toast((type==='lock_all'?'Lock all':'Strict on')+' sent to '+(name||'device')); }
+  }
+
+  async function loadBlocks(uid){
+    var r = await sb.from('configs').select('data').eq('user_id',uid).maybeSingle();
+    var d = r.data && r.data.data;
+    var ul=$('blocks'); ul.innerHTML='';
+    if(!d){ $('blocksSummary').textContent='No blocks synced yet.'; return; }
+    var lists=d.lists||[];
+    var nSites=0, nApps=0;
+    lists.forEach(function(l){ nSites+=(l.websites||[]).length; nApps+=(l.apps||[]).length; });
+    $('blocksSummary').textContent = lists.length+' list(s) · '+nSites+' site(s) · '+nApps+' app(s)'+
+      (d.adultFilter?' · adult filter on':'')+((d.webFilter&&d.webFilter.enabled)?' · allow-list on':'');
+    lists.forEach(function(l){
+      var li=document.createElement('li');
+      li.textContent='• '+(l.name||'List')+': '+((l.websites||[]).slice(0,6).join(', ')||'(apps only)')+((l.websites||[]).length>6?'…':'');
+      ul.appendChild(li);
+    });
+  }
+
+  function subscribe(uid){
+    try{
+      sb.channel('phone-'+uid)
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'commands',filter:'user_id=eq.'+uid},
+          function(p){ var c=p.new; if(c.target_device && c.target_device!==deviceId) return;
+            toast('Command received: '+c.type); })
+        .subscribe();
+    }catch(e){}
+  }
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  $('signinBtn').onclick=async function(){
+    $('authMsg').textContent='Signing in…';
+    var r=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+    if(r.error){ $('authMsg').textContent='⚠ '+r.error.message; } else { $('authMsg').textContent=''; show(); }
+  };
+  $('signupBtn').onclick=async function(){
+    $('authMsg').textContent='Creating account…';
+    var r=await sb.auth.signUp({email:$('email').value.trim(),password:$('password').value});
+    if(r.error){ $('authMsg').textContent='⚠ '+r.error.message; }
+    else if(!r.data.session){ $('authMsg').textContent='Check your email to confirm, then sign in.'; }
+    else { $('authMsg').textContent=''; show(); }
+  };
+  $('signoutBtn').onclick=async function(){ await sb.auth.signOut(); location.reload(); };
+
+  // Register the service worker so the app is installable (and PWABuilder-ready).
+  if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(function(){}); }
+
+  show();
+})();
+</script>
+</body>
+</html>

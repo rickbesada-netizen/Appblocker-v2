@@ -1,0 +1,66 @@
+# XcodeGen spec. On a Mac: `brew install xcodegen`, then `xcodegen generate`,
+# then open AppBlocker.xcodeproj. Replace the bundle-id prefix and App Group
+# with your own, and set your Team in Signing.
+name: AppBlocker
+options:
+  bundleIdPrefix: com.yourcompany
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.9"
+targets:
+  AppBlocker:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.appblocker
+        CODE_SIGN_ENTITLEMENTS: Support/App.entitlements
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+    dependencies:
+      - target: MonitorExtension
+      - target: ShieldConfiguration
+      - target: ShieldAction
+  MonitorExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - MonitorExtension
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.appblocker.monitor
+        CODE_SIGN_ENTITLEMENTS: Support/Monitor.entitlements
+        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.deviceactivity.monitor-extension
+        INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).DeviceActivityMonitorExtension
+  ShieldConfiguration:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ShieldConfiguration
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.appblocker.shieldconfig
+        CODE_SIGN_ENTITLEMENTS: Support/ShieldConfig.entitlements
+        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.ManagedSettingsUI.shield-configuration-service
+        INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldConfigurationExtension
+  ShieldAction:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ShieldAction
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.appblocker.shieldaction
+        CODE_SIGN_ENTITLEMENTS: Support/ShieldAction.entitlements
+        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.ManagedSettings.shield-action-service
+        INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldActionExtension

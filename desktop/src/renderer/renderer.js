@@ -5,6 +5,7 @@ window.__appblockerInit = true;
 const api = window.api;
 let state = { lists: [], strict: {}, adultStrict: {}, webFilter: {} };
 let editing = null;      // list being edited (a copy)
+let editorSnapshot = ''; // form state when the editor opened / last saved
 let globalCfg = null;    // renderer-held unlock config for the global strict
 
 const DAYS = ['S','M','T','W','T','F','S']; // 0=Sun..6=Sat
@@ -256,8 +257,28 @@ function openEditor(list){
   renderEditorRanges();
   renderListStrict();
   $('editor').classList.remove('hidden');
+  editorSnapshot=editorFormState();
 }
-function closeEditor(){ $('editor').classList.add('hidden'); editing=null; }
+// A stable string of everything the editor can change, to detect unsaved edits.
+function editorFormState(){
+  if(!editing) return '';
+  return JSON.stringify({
+    name:($('listName').value||'').trim(),
+    websites:$('listSites').value.split('\n').map(s=>s.trim()).filter(Boolean),
+    exceptions:($('listExceptions')?$('listExceptions').value:'').split('\n').map(s=>s.trim()).filter(Boolean),
+    apps:$('listApps').value.split('\n').map(s=>s.trim()).filter(Boolean),
+    scheduleEnabled:$('schedEnabled').checked,
+    ranges:editing.ranges||[]
+  });
+}
+function reallyCloseEditor(){ $('editor').classList.add('hidden'); editing=null; }
+async function closeEditor(){
+  if(editing && editorFormState()!==editorSnapshot){
+    const ok=window.confirm('You have unsaved changes to this list.\n\nOK = Save and close\nCancel = Discard changes');
+    if(ok){ if(!(await doEditorSave())) return; } // save failed (e.g. 24/7 schedule) -> stay open
+  }
+  reallyCloseEditor();
+}
 function renderEditorRanges(){ renderRangesInto($('ranges'), editing.ranges, renderEditorRanges); }
 
 function liveList(){ return (state.lists||[]).find(l=>editing && l.id===editing.id); }
@@ -269,18 +290,20 @@ $('newListBtn').onclick=()=>openEditor(null);
 $('editorClose').onclick=closeEditor;
 $('schedEnabled').onchange=(e)=>{ editing.scheduleEnabled=e.target.checked; if(!editing.ranges||!editing.ranges.length)editing.ranges=[defaultRange()]; $('schedBox').classList.toggle('hidden',!e.target.checked); renderEditorRanges(); };
 $('addRange').onclick=()=>{ editing.ranges.push(defaultRange()); renderEditorRanges(); };
-$('deleteList').onclick=async()=>{ const r=await api.deleteList(editing.id); if(r.error)alert(r.error); else {state=r;closeEditor();renderLists();} };
-$('saveList').onclick=async()=>{
+$('deleteList').onclick=async()=>{ const r=await api.deleteList(editing.id); if(r.error)alert(r.error); else {state=r;reallyCloseEditor();renderLists();} };
+$('saveList').onclick=()=>doEditorSave();
+async function doEditorSave(){
   editing.name=$('listName').value.trim()||'Block list';
   editing.websites=$('listSites').value.split('\n').map(s=>s.trim()).filter(Boolean);
   editing.exceptions=($('listExceptions')?$('listExceptions').value:'').split('\n').map(s=>s.trim()).filter(Boolean);
   editing.apps=$('listApps').value.split('\n').map(s=>s.trim()).filter(Boolean);
   editing.scheduleEnabled=$('schedEnabled').checked;
-  if(!editing.websites.length && !editing.apps.length){ alert('Add at least one app or website.'); return; }
+  if(!editing.websites.length && !editing.apps.length){ alert('Add at least one app or website.'); return false; }
   const r=await api.saveList(editing);
-  if(r.error){ alert(r.error); return; }
-  state=r; renderLists(); renderListStrict();
-};
+  if(r.error){ alert(r.error); return false; }
+  state=r; editorSnapshot=editorFormState(); renderLists(); renderListStrict();
+  return true;
+}
 $('pickApps').onclick=async()=>{
   const procs=await api.listProcesses();
   const box=$('runningApps'); box.innerHTML=''; box.classList.remove('hidden');
@@ -293,6 +316,7 @@ $('pickApps').onclick=async()=>{
 
 // ---- Unlock-method modal ----
 let ucState=null; // { cfg, onSave }
+let ucSnapshot=''; // cfg when the modal opened / last saved
 function toCfg(lockObj){
   lockObj=lockObj||{};
   return {
@@ -310,8 +334,15 @@ const UC_METHODS=[
   {key:'cooldown',label:'Cooldown (wait after pressing unlock)'},
   {key:'schedule',label:'Follow schedules (locked during set times)'}
 ];
-function openUnlock(cfg, onSave){ ucState={cfg,onSave}; renderUc(); $('ucModal').classList.remove('hidden'); }
-function closeUc(){ $('ucModal').classList.add('hidden'); ucState=null; }
+function openUnlock(cfg, onSave){ ucState={cfg,onSave}; ucSnapshot=JSON.stringify(cfg); renderUc(); $('ucModal').classList.remove('hidden'); }
+function reallyCloseUc(){ $('ucModal').classList.add('hidden'); ucState=null; }
+async function closeUc(){
+  if(ucState && JSON.stringify(ucState.cfg)!==ucSnapshot){
+    const ok=window.confirm('You have unsaved unlock-method changes.\n\nOK = Save and close\nCancel = Discard changes');
+    if(ok){ if(!(await doUcSave())) return; } // save failed (e.g. 24/7 schedule) -> stay open
+  }
+  reallyCloseUc();
+}
 function renderUc(){
   const box=$('ucMethods'); box.innerHTML=''; const cfg=ucState.cfg;
   UC_METHODS.forEach(m=>{
@@ -354,14 +385,17 @@ function renderUc(){
   });
 }
 $('ucClose').onclick=closeUc;
-$('ucSave').onclick=async()=>{
+$('ucSave').onclick=async()=>{ if(await doUcSave()) reallyCloseUc(); };
+async function doUcSave(){
   const cfg=ucState.cfg;
   const payload={ methods:cfg.methods, waitMinutes:cfg.waitMinutes, cooldownSeconds:cfg.cooldownSeconds, ranges:cfg.ranges };
   if(cfg.password) payload.password=cfg.password;
   if(cfg.clearPassword) payload.clearPassword=true;
   const ok=await ucState.onSave(payload);
-  if(ok!==false) closeUc();
-};
+  if(ok===false) return false;       // onSave rejected (e.g. 24/7 schedule) -> keep editing
+  ucSnapshot=JSON.stringify(ucState.cfg);
+  return true;
+}
 
 // ---- Deactivate (shared) ----
 function lockFor(kind, id){
