@@ -638,11 +638,14 @@ class BlockListEditActivity : AppCompatActivity() {
             Toast.makeText(this, "Every time range needs at least one day", Toast.LENGTH_SHORT).show()
             return false
         }
-        // Guaranteed free window: never let a schedule seal the whole week.
-        ScheduleGuard.scheduleError(list.scheduleEnabled, list.ranges)?.let {
-            AlertDialog.Builder(this).setTitle("Leave a free minute").setMessage(it)
-                .setPositiveButton("OK", null).show()
-            return false
+        // Guaranteed free window: never let a schedule seal the whole week -
+        // UNLESS a weekly unlock window is set, which gives immunity (24/7 allowed).
+        if (!WeeklyWindowStore.hasGrace(this)) {
+            ScheduleGuard.scheduleError(list.scheduleEnabled, list.ranges)?.let {
+                AlertDialog.Builder(this).setTitle("Leave a free minute").setMessage(it)
+                    .setPositiveButton("OK", null).show()
+                return false
+            }
         }
         BlockListStore.upsert(this, list)
         Toast.makeText(this, "Saved \"${list.displayName()}\"", Toast.LENGTH_SHORT).show()

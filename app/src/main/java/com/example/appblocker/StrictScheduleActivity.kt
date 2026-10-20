@@ -155,11 +155,14 @@ class StrictScheduleActivity : AppCompatActivity() {
             Toast.makeText(this, "Pick at least one day", Toast.LENGTH_SHORT).show()
             return false
         }
-        // Guaranteed free window: a follow-schedules lock must leave a minute to unlock.
-        ScheduleGuard.scheduleError(true, valid)?.let {
-            androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Leave a free minute")
-                .setMessage(it).setPositiveButton("OK", null).show()
-            return false
+        // Guaranteed free window: a follow-schedules lock must leave a minute to
+        // unlock - unless a weekly unlock window is set (that gives immunity).
+        if (!WeeklyWindowStore.hasGrace(this)) {
+            ScheduleGuard.scheduleError(true, valid)?.let {
+                androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Leave a free minute")
+                    .setMessage(it).setPositiveButton("OK", null).show()
+                return false
+            }
         }
         StrictScheduleStore.setRanges(this, valid, scope)
         Toast.makeText(this, "Schedule saved", Toast.LENGTH_SHORT).show()

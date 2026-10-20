@@ -22,6 +22,7 @@ import com.example.appblocker.UnlockChecker
 import com.example.appblocker.UnlockMethod
 import com.example.appblocker.UnlockMethodActivity
 import com.example.appblocker.UnlockMethodStore
+import com.example.appblocker.WeeklyWindowStore
 import com.google.android.material.button.MaterialButton
 import java.util.concurrent.TimeUnit
 
@@ -55,7 +56,81 @@ class StrictModeFragment : Fragment() {
         view.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.strictSwitch)
             .setOnClickListener { onToggleClicked(view) }
 
+        setupWeeklyWindow(view)
         renderState(view)
+    }
+
+    // ----- Weekly unlock window -----
+    private var wwStartValue = "03:00"
+
+    private fun setupWeeklyWindow(view: View) {
+        val context = requireContext()
+        val days = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+        val spinner = view.findViewById<android.widget.Spinner>(R.id.wwDay)
+        spinner.adapter = android.widget.ArrayAdapter(
+            context, android.R.layout.simple_spinner_dropdown_item, days
+        )
+        spinner.setSelection(WeeklyWindowStore.day(context))
+
+        wwStartValue = WeeklyWindowStore.start(context)
+        val startBtn = view.findViewById<MaterialButton>(R.id.wwStart)
+        startBtn.text = wwStartValue
+        startBtn.setOnClickListener {
+            val parts = wwStartValue.split(":")
+            val h = parts.getOrNull(0)?.toIntOrNull() ?: 3
+            val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            android.app.TimePickerDialog(context, { _, hh, mm ->
+                wwStartValue = String.format("%02d:%02d", hh, mm)
+                startBtn.text = wwStartValue
+            }, h, m, true).show()
+        }
+
+        view.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.wwEnabled)
+            .isChecked = WeeklyWindowStore.isEnabled(context)
+        view.findViewById<EditText>(R.id.wwMinutes).setText(WeeklyWindowStore.minutes(context).toString())
+
+        view.findViewById<MaterialButton>(R.id.wwSave).setOnClickListener { saveWeeklyWindow(view) }
+        renderWeekly(view)
+    }
+
+    private fun saveWeeklyWindow(view: View) {
+        val context = requireContext()
+        // Can't change the window while Strict Mode is locked outside the window.
+        if (StrictModeStore.isActive(context) && WeeklyWindowStore.isEnabled(context) && !WeeklyWindowStore.within(context)) {
+            Toast.makeText(context, "You can only change the weekly window during the window itself.", Toast.LENGTH_LONG).show()
+            renderWeekly(view)
+            return
+        }
+        val enabled = view.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.wwEnabled).isChecked
+        val day = view.findViewById<android.widget.Spinner>(R.id.wwDay).selectedItemPosition
+        val minutes = view.findViewById<EditText>(R.id.wwMinutes).text.toString().toIntOrNull()?.coerceAtLeast(1) ?: 1
+
+        // Don't let turning the window OFF seal a schedule with no free minute.
+        if (!enabled) {
+            val ranges = ArrayList<com.example.appblocker.TimeRange>()
+            for (l in com.example.appblocker.BlockListStore.getAll(context)) if (l.scheduleEnabled) ranges.addAll(l.ranges)
+            ranges.addAll(com.example.appblocker.StrictScheduleStore.getRanges(context))
+            if (ranges.isNotEmpty() && !com.example.appblocker.ScheduleGuard.leavesWeeklyGap(ranges)) {
+                AlertDialog.Builder(context).setTitle("Can't turn the window off")
+                    .setMessage("One of your schedules covers the whole day with no free minute, and this window is the only time you could unlock. End that range a minute early (e.g. 00:00-23:58) first, or leave the window on.")
+                    .setPositiveButton("OK", null).show()
+                view.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.wwEnabled).isChecked = true
+                return
+            }
+        }
+
+        WeeklyWindowStore.set(context, enabled, day, wwStartValue, minutes)
+        Toast.makeText(context, "Weekly window saved", Toast.LENGTH_SHORT).show()
+        renderWeekly(view)
+    }
+
+    private fun renderWeekly(view: View) {
+        val context = requireContext()
+        val status = view.findViewById<TextView>(R.id.wwStatus)
+        status.text = if (WeeklyWindowStore.isEnabled(context))
+            "Locked all week except ${WeeklyWindowStore.dayName(WeeklyWindowStore.day(context))} " +
+                "${WeeklyWindowStore.start(context)} for ${WeeklyWindowStore.minutes(context)} min — the only time anything unlocks."
+        else "Off — Strict Mode uses its own unlock method instead."
     }
 
     override fun onResume() {
@@ -159,6 +234,21 @@ class StrictModeFragment : Fragment() {
 
     private fun attemptDeactivate(view: View) {
         val context = requireContext()
+
+        // Weekly unlock window: if enabled, Strict Mode can ONLY be turned off
+        // during that window. It's the guaranteed way out (and grants schedule
+        // immunity elsewhere).
+        if (WeeklyWindowStore.isEnabled(context) && !WeeklyWindowStore.within(context)) {
+            Toast.makeText(
+                context,
+                "Locked until your weekly window: ${WeeklyWindowStore.dayName(WeeklyWindowStore.day(context))} " +
+                    "${WeeklyWindowStore.start(context)} for ${WeeklyWindowStore.minutes(context)} min.",
+                Toast.LENGTH_LONG
+            ).show()
+            syncSwitch(view)
+            return
+        }
+
         val selected = UnlockMethodStore.getSelectedMethods(context)
 
         if (selected.isEmpty()) {

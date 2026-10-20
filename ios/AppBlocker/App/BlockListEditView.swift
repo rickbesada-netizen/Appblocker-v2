@@ -94,8 +94,9 @@ struct BlockListEditView: View {
         if draft.isEmpty {
             return
         }
-        // Guaranteed free window: never let a schedule seal the whole week.
-        if let err = ScheduleGuard.scheduleError(draft.scheduleEnabled, draft.ranges) {
+        // Guaranteed free window: never let a schedule seal the whole week -
+        // unless a weekly unlock window is set, which gives immunity (24/7 OK).
+        if !strict.hasGrace, let err = ScheduleGuard.scheduleError(draft.scheduleEnabled, draft.ranges) {
             scheduleAlert = err
             return
         }
