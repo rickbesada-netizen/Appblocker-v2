@@ -36,6 +36,26 @@ function anyLockOn() {
   return lock.isOn(store.get().strict);
 }
 
+// When the weekly unlock window is enabled it guarantees a free period every
+// week (that 1+ minute is the user's immunity), so a schedule is then allowed to
+// cover the whole day (00:00-23:59). Without a weekly window, a schedule must
+// leave at least one free minute itself.
+function weeklyGrace() {
+  const w = store.get().weeklyWindow;
+  return !!(w && w.enabled && (Number(w.minutes) || 0) >= 1);
+}
+
+// Every schedule that governs this device (block lists + the strict follow-
+// schedules), used to check a free minute exists somewhere.
+function allScheduleRanges() {
+  const s = store.get();
+  const out = [];
+  for (const l of (s.lists || [])) if (l.scheduleEnabled) out.push(...(l.ranges || []));
+  const st = s.strict || {};
+  if ((st.methods || []).includes('schedule')) out.push(...(st.ranges || []));
+  return out;
+}
+
 // Names of what's currently locked, for error messages.
 function lockBlockers() {
   return lock.isOn(store.get().strict) ? ['Strict Mode (Strict Mode tab)'] : [];
@@ -248,8 +268,8 @@ if (gotLock) app.whenReady().then(() => {
     if (prev && listLocked(prev) && weakens(prev, list)) {
       return { error: 'Locked: you can only add to this list, not remove from it' };
     }
-    // Schedule 24/7 guard.
-    const err = guard.scheduleError(list.scheduleEnabled, list.ranges);
+    // Schedule 24/7 guard (waived when a weekly unlock window gives immunity).
+    const err = weeklyGrace() ? null : guard.scheduleError(list.scheduleEnabled, list.ranges);
     if (err) return { error: err };
     // Preserve the stored strict lock (it's managed via its own IPC).
     list.strict = lock.normalize(prev ? prev.strict : list.strict);
@@ -314,7 +334,7 @@ if (gotLock) app.whenReady().then(() => {
   // ----- Global Strict Mode -----
   ipcMain.handle('strict:activate', (_e, opts) => {
     if (!store.get().consentAccepted) return { error: 'Please accept the setup disclosure first.' };
-    const err = opts && opts.methods && opts.methods.includes('schedule')
+    const err = (opts && opts.methods && opts.methods.includes('schedule') && !weeklyGrace())
       ? guard.scheduleError(true, opts.ranges) : null;
     if (err) return { error: err };
     return strict.activate(store, opts || {});
@@ -337,6 +357,14 @@ if (gotLock) app.whenReady().then(() => {
     if (lock.isOn(cur.strict) && cur.weeklyWindow && cur.weeklyWindow.enabled
         && !weekly.withinWeeklyWindow(cur.weeklyWindow)) {
       return { error: 'You can only change the weekly window during the window itself.' };
+    }
+    // Don't let turning the window OFF seal a schedule that covers the whole
+    // day/week with no free minute (it's the only escape in that case).
+    if (!(win && win.enabled)) {
+      const ranges = allScheduleRanges();
+      if (ranges.length && !guard.leavesWeeklyGap(ranges)) {
+        return { error: 'Can\'t turn the weekly window off: one of your schedules covers the whole day with no free minute, and this window is the only time you could unlock. End that range a minute early (for example 00:00-23:58) first, or leave the window on.' };
+      }
     }
     const s = store.get();
     s.weeklyWindow = {
@@ -540,7 +568,7 @@ function configError(config) {
     if (!active.length) {
       return 'Add at least one weekly time window for "follow schedules" - with none set, the lock could never be turned off.';
     }
-    const err = guard.scheduleError(true, config.ranges || []);
+    const err = weeklyGrace() ? null : guard.scheduleError(true, config.ranges || []);
     if (err) return err;
   }
   return null;
