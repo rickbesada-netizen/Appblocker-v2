@@ -528,7 +528,7 @@ $('saveAllowed').onclick=async()=>{
 };
 
 // ---- Settings ----
-$('startupToggle').onchange=async(e)=>{ state=await api.setStartup(e.target.checked); };
+$('startupToggle').onchange=async(e)=>{ const r=await api.setStartup(e.target.checked); if(r&&r.error){ alert(r.error); e.target.checked=!e.target.checked; } else state=r; };
 
 // ---- BitLocker (detect + guide) ----
 async function renderBitlocker(){
@@ -612,13 +612,21 @@ async function renderAdminPw(){
   const reveal=$('adminPwReveal');
   if(r.locked){ reveal.textContent = r.has ? '🔒 Hidden while Strict Mode is on. Turn Strict Mode off to view it.' : ''; reveal.style.color='#e5a53b'; }
 }
+function genPassword(len){
+  // A-Z a-z 2-9 and a few safe symbols; avoids ambiguous chars (0/O/1/l/I).
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%*+=?';
+  const a=new Uint32Array(len); (window.crypto||window.msCrypto).getRandomValues(a);
+  let out=''; for(let i=0;i<len;i++) out+=chars[a[i]%chars.length];
+  return out;
+}
+if($('adminPwGen')) $('adminPwGen').onclick=()=>{ $('adminPwInput').value=genPassword(20); $('adminPwInput').focus(); };
 if($('adminPwSave')) $('adminPwSave').onclick=async()=>{
   const v=$('adminPwInput').value;
-  if(!v){ alert('Enter the admin password first.'); return; }
+  if(!v){ alert('Enter or generate the admin password first.'); return; }
   await api.setAdminPassword(v);
   $('adminPwInput').value='';
   await renderAdminPw();
-  alert('Admin password saved.');
+  alert('Admin password saved (and queued to back up to your cloud account if signed in).');
 };
 if($('adminPwShow')) $('adminPwShow').onclick=async()=>{
   const r=await api.getAdminPassword();

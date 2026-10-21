@@ -69,17 +69,34 @@ let lastPushedJson = '';
 // per-device lock state (each device arms Strict itself).
 function syncableConfig(s) {
   return {
+    source: 'desktop',
     lists: (s.lists || []).map(l => ({
       id: l.id, name: l.name, websites: l.websites || [], apps: l.apps || [],
       exceptions: l.exceptions || [], scheduleEnabled: !!l.scheduleEnabled, ranges: l.ranges || []
     })),
     adultFilter: !!s.adultFilter,
-    webFilter: { enabled: !!(s.webFilter && s.webFilter.enabled), allowedSites: (s.webFilter && s.webFilter.allowedSites) || [] }
+    webFilter: { enabled: !!(s.webFilter && s.webFilter.enabled), allowedSites: (s.webFilter && s.webFilter.allowedSites) || [] },
+    // Cloud backup of the vaults (admin password / BitLocker key) so they can't
+    // be lost if this PC dies. Still only revealed in-app when Strict Mode is off.
+    vault: { adminPassword: s.adminPassword || '', bitlockerKey: s.bitlockerKey || '' }
   };
 }
 
 function applyRemoteConfig(data) {
   if (!data) return;
+  // Vault backup is shared regardless of which app wrote the row; merge it in
+  // without ever wiping a value we already have. (Allowed even while locked -
+  // it's write-only backup, never revealed here.)
+  if (data.vault) {
+    const sv = store.get();
+    let changed = false;
+    if (data.vault.adminPassword && data.vault.adminPassword !== sv.adminPassword) { sv.adminPassword = data.vault.adminPassword; changed = true; }
+    if (data.vault.bitlockerKey && data.vault.bitlockerKey !== sv.bitlockerKey) { sv.bitlockerKey = data.vault.bitlockerKey; changed = true; }
+    if (changed) store.set(sv);
+  }
+  // Only apply block lists written by another DESKTOP (ignore the phone's
+  // different list shape so it can't mangle desktop lists).
+  if (data.source && data.source !== 'desktop') return;
   // Safety: never let a remote edit weaken a device that is currently locked.
   if (anyLockOn()) return;
   const s = store.get();
@@ -553,6 +570,9 @@ if (gotLock) app.whenReady().then(() => {
   });
 
   ipcMain.handle('settings:startup', (_e, on) => {
+    // Can't disable launch-on-startup while Strict Mode is on (that would stop
+    // enforcement after a reboot).
+    if (!on && lock.isOn(store.get().strict)) return { error: 'Locked by Strict Mode' };
     const s = store.get(); s.launchOnStartup = !!on; store.set(s);
     app.setLoginItemSettings({ openAtLogin: !!on });
     return store.get();
