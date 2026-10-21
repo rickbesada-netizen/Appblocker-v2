@@ -14,8 +14,11 @@ const { listActive } = require('../shared/schedule');
 const safedns = require('../shared/safedns');
 const sites = require('../shared/sites');
 const hosts = require('../main/hosts');
+const bitlocker = require('../main/bitlocker');
 const selfdefense = require('./selfdefense');
 const frozen = require('./frozen');
+
+let lastBitlocker = 0;
 
 function readConfig() {
   try { return JSON.parse(fs.readFileSync(configFile(), 'utf8')); }
@@ -43,9 +46,15 @@ function tick() {
     // Self-defense (Windows): Safe-Mode lockout + install-dir ACLs while locked,
     // auto-released in the weekly buffer. Never touches WinRE/boot. Fail-open.
     selfdefense.reconcile(cfg);
-    // Frozen Turkey: sign out frozen Windows accounts during their freeze
-    // schedule (lifted during the weekly window).
+    // Scheduled Sign-Out: sign out the chosen Windows account during its schedule
+    // (lifted during the weekly window).
     frozen.reconcile(cfg);
+    // Refresh BitLocker status (we're elevated; the standard-user app can't read
+    // it) into a shared file the app reads. Throttled to once a minute.
+    if (process.platform === 'win32' && Date.now() - lastBitlocker > 60000) {
+      lastBitlocker = Date.now();
+      try { bitlocker.refreshStatusFile(); } catch (e) {}
+    }
   } catch (e) {
     // keep the loop alive no matter what
   }

@@ -537,11 +537,20 @@ async function renderBitlocker(){
   const card=$('bitlockerCard'); if(!card) return;
   if(!b || b.supported===false){ card.style.display='none'; return; }
   card.style.display='';
-  const on=!!b.on;
   const s=$('bitlockerStatus');
-  s.textContent = on ? '✅ BitLocker is ON for this PC.' : '⚠ BitLocker is OFF for this PC.';
-  s.style.color = on ? '#36c17a' : '#e5a53b';
-  $('bitlockerBtn').style.display = on ? 'none' : '';
+  if(b.on===true){
+    s.textContent='✅ BitLocker is ON for this PC.'; s.style.color='#36c17a';
+    $('bitlockerBtn').style.display='none';
+  } else if(b.on===false){
+    s.textContent='⚠ BitLocker is OFF for this PC.'; s.style.color='#e5a53b';
+    $('bitlockerBtn').style.display='';
+  } else {
+    // Can't read the status yet (needs the background helper, which refreshes it
+    // within a minute of install/launch).
+    s.textContent='Checking BitLocker status… (give the background helper a minute)';
+    s.style.color='#9a9ab0';
+    $('bitlockerBtn').style.display='';
+  }
 }
 if($('bitlockerBtn')) $('bitlockerBtn').onclick=async()=>{ await api.openBitlocker(); };
 renderBitlocker();
