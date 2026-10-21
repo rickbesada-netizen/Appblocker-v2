@@ -77,7 +77,8 @@ class BlockListEditActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val requestedId = intent.getStringExtra(EXTRA_LIST_ID)
-        val locked = StrictModeStore.isActive(this) && StrictOptionsStore.isLockBlockingsInApp(this)
+        // Central Strict Mode locks editing (add-only) whenever it's active.
+        val locked = StrictModeStore.isActive(this)
         val editingExisting = requestedId != null &&
             (requestedId != BlockList.QUICK_ID || QuickBlockStore.isRunning(this))
         // Strict Mode: editing an existing list is allowed but ADD-ONLY -

@@ -65,13 +65,6 @@ class SelectOptionsActivity : AppCompatActivity() {
 
         val rows = listOf(
             OptionRow(
-                title = "Lock blockings in app",
-                description = "You won't have access to edit, pause or delete your blockings in AppBlocker.",
-                caveat = null,
-                isChecked = { StrictOptionsStore.isLockBlockingsInApp(this) },
-                onChanged = { _, checked -> StrictOptionsStore.setLockBlockingsInApp(this, checked) }
-            ),
-            OptionRow(
                 title = "Disable AppBlocker uninstalling",
                 description = "You won't be able to uninstall AppBlocker without deactivating device admin first.",
                 caveat = null,

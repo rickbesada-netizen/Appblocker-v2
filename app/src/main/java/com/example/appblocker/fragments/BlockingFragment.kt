@@ -378,8 +378,8 @@ class BlockingFragment : Fragment() {
         startActivity(intent)
     }
 
-    private fun isLocked(): Boolean =
-        StrictModeStore.isActive(requireContext()) && StrictOptionsStore.isLockBlockingsInApp(requireContext())
+    // Central Strict Mode: when it's on, your blockings are locked - period.
+    private fun isLocked(): Boolean = StrictModeStore.isActive(requireContext())
 
     private fun toastLocked() {
         Toast.makeText(requireContext(), "Strict Mode: you can only make blocking stricter", Toast.LENGTH_SHORT).show()

@@ -402,7 +402,7 @@ class StrictModeFragment : Fragment() {
     private fun renderLockedItems(view: View) {
         val context = requireContext()
         val locked = mutableListOf<String>()
-        if (StrictOptionsStore.isLockBlockingsInApp(context)) locked.add("Manage Apps")
+        locked.add("Your blockings")   // always locked while Strict Mode is on
         if (StrictOptionsStore.isDisableUninstall(context)) locked.add("Uninstalling")
         if (StrictOptionsStore.isBlockDeviceSettings(context)) locked.add("Device settings")
         if (StrictOptionsStore.isBlockReinstalledApps(context)) locked.add("Reinstall bypass")
