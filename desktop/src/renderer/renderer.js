@@ -626,7 +626,7 @@ if($('adminPwSave')) $('adminPwSave').onclick=async()=>{
   await api.setAdminPassword(v);
   $('adminPwInput').value='';
   await renderAdminPw();
-  alert('Admin password saved (and queued to back up to your cloud account if signed in).');
+  alert('Admin password saved locally on this PC.');
 };
 if($('adminPwShow')) $('adminPwShow').onclick=async()=>{
   const r=await api.getAdminPassword();

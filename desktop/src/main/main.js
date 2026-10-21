@@ -75,25 +75,14 @@ function syncableConfig(s) {
       exceptions: l.exceptions || [], scheduleEnabled: !!l.scheduleEnabled, ranges: l.ranges || []
     })),
     adultFilter: !!s.adultFilter,
-    webFilter: { enabled: !!(s.webFilter && s.webFilter.enabled), allowedSites: (s.webFilter && s.webFilter.allowedSites) || [] },
-    // Cloud backup of the vaults (admin password / BitLocker key) so they can't
-    // be lost if this PC dies. Still only revealed in-app when Strict Mode is off.
-    vault: { adminPassword: s.adminPassword || '', bitlockerKey: s.bitlockerKey || '' }
+    webFilter: { enabled: !!(s.webFilter && s.webFilter.enabled), allowedSites: (s.webFilter && s.webFilter.allowedSites) || [] }
+    // The admin-password / BitLocker vault is intentionally NOT synced - it stays
+    // local to this PC only.
   };
 }
 
 function applyRemoteConfig(data) {
   if (!data) return;
-  // Vault backup is shared regardless of which app wrote the row; merge it in
-  // without ever wiping a value we already have. (Allowed even while locked -
-  // it's write-only backup, never revealed here.)
-  if (data.vault) {
-    const sv = store.get();
-    let changed = false;
-    if (data.vault.adminPassword && data.vault.adminPassword !== sv.adminPassword) { sv.adminPassword = data.vault.adminPassword; changed = true; }
-    if (data.vault.bitlockerKey && data.vault.bitlockerKey !== sv.bitlockerKey) { sv.bitlockerKey = data.vault.bitlockerKey; changed = true; }
-    if (changed) store.set(sv);
-  }
   // Only apply block lists written by another DESKTOP (ignore the phone's
   // different list shape so it can't mangle desktop lists).
   if (data.source && data.source !== 'desktop') return;

@@ -122,19 +122,11 @@ object CloudSync {
         scope.launch {
             runCatching {
                 val listsElement = json.parseToJsonElement(listsRaw)
-                // Preserve the desktop's vault backup (admin password / BitLocker
-                // key) so a phone push never erases it from the shared row.
-                val vault = runCatching {
-                    val row = client.from("configs").select { filter { eq("user_id", uid!!) } }
-                        .decodeSingleOrNull<ConfigRow>()
-                    (row?.data as? JsonObject)?.get("vault")
-                }.getOrNull()
                 client.from("configs").upsert(buildJsonObject {
                     put("user_id", uid!!)
                     put("data", buildJsonObject {
                         put("lists", listsElement)
                         put("source", "android")
-                        vault?.let { put("vault", it) }
                     })
                     put("updated_at", nowIso())
                     deviceId?.let { put("updated_by", it) }
