@@ -64,13 +64,25 @@ struct StrictModeView: View {
                         .disabled(strict.active && strict.weeklyEnabled && !strict.withinWindow())
                 }
 
-                if strict.active, let until = unlockAt, until > now {
-                    Section {
-                        Text("Unlocks in \(Int(until.timeIntervalSince(now)) / 60)m \(Int(until.timeIntervalSince(now)) % 60)s")
-                            .font(.title3.monospacedDigit().bold())
-                            .foregroundStyle(.blue)
-                        Button("Turn off now (if the wait is over)") {
-                            unlockAt = strict.requestDeactivate()
+                if strict.active {
+                    Section("When it unlocks") {
+                        if let until = strict.nextUnlock(now), until > now {
+                            Text("🔒 Unlocks \(whenText(until))")
+                                .font(.title3.bold())
+                                .foregroundStyle(.blue)
+                            if until.timeIntervalSince(now) < 3600 {
+                                Text("in \(Int(until.timeIntervalSince(now)) / 60)m \(Int(until.timeIntervalSince(now)) % 60)s")
+                                    .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                            }
+                            Button("Turn off now (if the wait is over)") {
+                                unlockAt = strict.requestDeactivate()
+                            }
+                        } else {
+                            Text(strict.weeklyEnabled
+                                 ? "🔓 Unlockable now — your weekly window is open."
+                                 : "🔓 You can turn it off now.")
+                                .font(.headline).foregroundStyle(.green)
+                            Button("Turn off now") { unlockAt = strict.requestDeactivate() }
                         }
                     }
                 }
@@ -83,6 +95,21 @@ struct StrictModeView: View {
             } message: {
                 Text("One of your schedules covers the whole day with no free minute, and this window is the only time you could unlock. End that range a minute early (for example 00:00–23:58) first, or leave the window on.")
             }
+        }
+    }
+
+    // "today at 3:45 PM" / "tomorrow at 7:00 AM" / "Sun at 3:00 AM"
+    private func whenText(_ date: Date) -> String {
+        let cal = Calendar.current
+        let t = DateFormatter(); t.dateFormat = "h:mm a"
+        let clock = t.string(from: date)
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
+        switch days {
+        case 0: return "today at \(clock)"
+        case 1: return "tomorrow at \(clock)"
+        default:
+            let w = DateFormatter(); w.dateFormat = "EEE"
+            return "\(w.string(from: date)) at \(clock)"
         }
     }
 

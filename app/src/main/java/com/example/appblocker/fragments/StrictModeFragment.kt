@@ -15,6 +15,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import com.example.appblocker.R
+import com.example.appblocker.ScheduleFormat
 import com.example.appblocker.SelectOptionsActivity
 import com.example.appblocker.StrictModeStore
 import com.example.appblocker.StrictOptionsStore
@@ -127,10 +128,35 @@ class StrictModeFragment : Fragment() {
     private fun renderWeekly(view: View) {
         val context = requireContext()
         val status = view.findViewById<TextView>(R.id.wwStatus)
-        status.text = if (WeeklyWindowStore.isEnabled(context))
-            "Locked all week except ${WeeklyWindowStore.dayName(WeeklyWindowStore.day(context))} " +
+        status.text = if (WeeklyWindowStore.isEnabled(context)) {
+            val base = "Locked all week except ${WeeklyWindowStore.dayName(WeeklyWindowStore.day(context))} " +
                 "${WeeklyWindowStore.start(context)} for ${WeeklyWindowStore.minutes(context)} min — the only time anything unlocks."
-        else "Off — Strict Mode uses its own unlock method instead."
+            val next = if (WeeklyWindowStore.within(context)) "🔓 Open now — you can turn things off until it closes."
+                       else "🔒 Next opens ${ScheduleFormat.moment(WeeklyWindowStore.nextWindowStart(context), System.currentTimeMillis())}."
+            "$base\n$next"
+        } else "Off — Strict Mode uses its own unlock method instead."
+    }
+
+    /**
+     * The single clearest answer to "when does this unlock?" for the active lock.
+     * Weekly window wins (it's the guaranteed way out); otherwise the timer.
+     * Returns null when there's no fixed future time (e.g. PIN-only).
+     */
+    private fun unlockWhenText(): String? {
+        val context = requireContext()
+        if (!StrictModeStore.isActive(context)) return null
+        if (WeeklyWindowStore.isEnabled(context)) {
+            return if (WeeklyWindowStore.within(context)) "🔓 Unlockable now — weekly window is open"
+                   else "🔒 Unlocks ${ScheduleFormat.moment(WeeklyWindowStore.nextWindowStart(context), System.currentTimeMillis())}"
+        }
+        if (UnlockMethod.TIMER in UnlockMethodStore.getSelectedMethods(context)) {
+            val done = UnlockMethodStore.getActivatedAt(context) +
+                TimeUnit.MINUTES.toMillis(UnlockMethodStore.getTimerMinutes(context).toLong())
+            return if (done > System.currentTimeMillis())
+                "🔒 Unlocks ${ScheduleFormat.moment(done, System.currentTimeMillis())}"
+            else "🔓 Timer done — you can unlock now"
+        }
+        return null
     }
 
     override fun onResume() {
@@ -149,7 +175,16 @@ class StrictModeFragment : Fragment() {
         clockTicker?.let { handler.removeCallbacks(it) }
         val r = object : Runnable {
             override fun run() {
-                view?.let { renderTimer(it) }
+                view?.let {
+                    renderTimer(it)
+                    // Keep the "Unlocks …" line and weekly status live without tapping.
+                    if (StrictModeStore.isActive(requireContext())) {
+                        val when_ = unlockWhenText()
+                        it.findViewById<TextView>(R.id.lockStatusText).text =
+                            if (when_ != null) "Your blockings are locked\n$when_" else "Your blockings are locked"
+                    }
+                    renderWeekly(it)
+                }
                 handler.postDelayed(this, 1000)
             }
         }
@@ -375,7 +410,8 @@ class StrictModeFragment : Fragment() {
 
         if (active) {
             icon.setImageResource(R.drawable.ic_lock_closed_big)
-            statusText.text = "Your blockings are locked"
+            val when_ = unlockWhenText()
+            statusText.text = if (when_ != null) "Your blockings are locked\n$when_" else "Your blockings are locked"
             button.text = "Deactivate Lock"
         } else {
             icon.setImageResource(R.drawable.ic_lock_open_big)

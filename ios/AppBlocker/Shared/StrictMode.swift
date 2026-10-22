@@ -8,6 +8,7 @@ final class StrictMode: ObservableObject {
 
     private let activeKey = "strict_active"
     private let untilKey = "strict_until"
+    private let activatedAtKey = "strict_activated_at"
 
     @Published var active: Bool = false
 
@@ -77,6 +78,25 @@ final class StrictMode: ObservableObject {
         active = true
         AppGroup.defaults.set(true, forKey: activeKey)
         AppGroup.defaults.removeObject(forKey: untilKey)
+        AppGroup.defaults.set(Date(), forKey: activatedAtKey)
+    }
+
+    // When Strict Mode was turned on (used to show the timer unlock time up front).
+    var activatedAt: Date? { AppGroup.defaults.object(forKey: activatedAtKey) as? Date }
+
+    /// The clearest answer to "when does this unlock?", shown persistently while
+    /// locked — no tap needed. Weekly window wins; otherwise the wait timer.
+    /// nil means it can be turned off now (or there's no fixed future time).
+    func nextUnlock(_ nowDate: Date = Date()) -> Date? {
+        guard active else { return nil }
+        if weeklyEnabled {
+            return withinWindow(nowDate) ? nil : nextWindowDate(nowDate)
+        }
+        if waitMinutes <= 0 { return nil }
+        // Prefer an already-started countdown; else project from activation time.
+        let until = (AppGroup.defaults.object(forKey: untilKey) as? Date)
+            ?? (activatedAt ?? nowDate).addingTimeInterval(TimeInterval(waitMinutes * 60))
+        return until > nowDate ? until : nil
     }
 
     // Returns nil if it can be turned off now, else the date it unlocks.

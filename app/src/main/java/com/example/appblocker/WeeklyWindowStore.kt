@@ -61,4 +61,22 @@ object WeeklyWindowStore {
     fun dayName(d: Int): String =
         listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
             .getOrElse(d) { "Sunday" }
+
+    /** Epoch millis of the next time the window opens (strictly in the future). */
+    fun nextWindowStart(c: Context, now: Calendar = Calendar.getInstance()): Long {
+        val parts = start(c).split(":")
+        val h = parts.getOrNull(0)?.toIntOrNull() ?: 3
+        val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val target = now.clone() as Calendar
+        // Calendar SUNDAY=1 -> our 0..6
+        val nowDow = now.get(Calendar.DAY_OF_WEEK) - 1
+        val delta = (day(c) - nowDow + 7) % 7
+        target.set(Calendar.HOUR_OF_DAY, h)
+        target.set(Calendar.MINUTE, m)
+        target.set(Calendar.SECOND, 0)
+        target.set(Calendar.MILLISECOND, 0)
+        target.add(Calendar.DAY_OF_YEAR, delta)
+        if (target.timeInMillis <= now.timeInMillis) target.add(Calendar.DAY_OF_YEAR, 7)
+        return target.timeInMillis
+    }
 }

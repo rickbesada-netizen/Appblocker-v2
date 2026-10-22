@@ -97,6 +97,34 @@ function fmtDur(sec){
   const h=Math.floor(m/60), mm=m%60; return h+'h'+(mm?(' '+mm+'m'):'');
 }
 function fmtLeft(ms){ const s=Math.max(0,Math.round(ms/1000)); return fmtDur(s)+' left'; }
+// Weekly-window helpers (mirror shared/weekly.js) for showing the unlock time.
+function withinWeekly(w){
+  if(!w||!w.enabled) return false;
+  const MIN=7*24*60, now=new Date();
+  const t=now.getDay()*1440+now.getHours()*60+now.getMinutes();
+  const [h,m]=String(w.start||'03:00').split(':').map(Number);
+  const s=(w.day||0)*1440+(h||0)*60+(m||0), e=s+Math.max(1,Number(w.minutes)||1);
+  return e<=MIN ? (t>=s&&t<e) : (t>=s||t<(e-MIN));
+}
+function nextWeeklyStart(w){
+  const [h,m]=String(w.start||'03:00').split(':').map(Number);
+  const now=new Date(), d=new Date(now);
+  d.setDate(now.getDate()+((((w.day||0)-now.getDay())+7)%7));
+  d.setHours(h||0,m||0,0,0);
+  if(d.getTime()<=now.getTime()) d.setDate(d.getDate()+7);
+  return d;
+}
+// One clear "when does it unlock" line for a locked Strict Mode.
+function unlockWhenText(st){
+  const w=state.weeklyWindow;
+  if(w && w.enabled){
+    return withinWeekly(w)
+      ? '🔓 Unlockable now — your weekly window is open.'
+      : '🔒 Unlocks '+fmtWhen(nextWeeklyStart(w))+' (weekly window).';
+  }
+  const t=lockTiming(st);
+  return t ? ('🔒 '+t) : '';
+}
 // Returns e.g. "unlocks today 3:45 PM (12 min left)" for a locked lock, or '' if
 // it opens instantly / needs only a password.
 function lockTiming(lk){
@@ -426,7 +454,9 @@ function renderGlobalStrict(){
   globalCfg=toCfg(st);
   const methods=(st.methods||[]);
   if(st.enabled){
-    { const t=lockTiming(st); $('strictStatus').textContent='On - everything is locked.' + (methods.length?(' Unlock: '+methods.join(' + ')):'') + (t?(' · '+t):''); }
+    const uw=unlockWhenText(st);
+    const um=methods.length?(' Unlock: '+methods.join(' + ')+'.'):'';
+    $('strictStatus').textContent='On - everything is locked.' + um + (uw?('  '+uw):'');
     $('strictToggle').textContent='Deactivate Strict Mode';
     $('strictUnlockBtn').disabled=true;
   } else {
@@ -464,9 +494,13 @@ function renderWeekly(){
   $('wwStart').value=w.start||'03:00';
   $('wwMinutes').value=w.minutes||1;
   const s=$('wwStatus');
-  s.textContent = w.enabled
-    ? ('🔒 Locked all week except '+DAYNAMES[w.day||0]+' '+(w.start||'03:00')+' for '+(w.minutes||1)+' min — the only time anything can be turned off.')
-    : 'Off — Strict Mode uses its own unlock method instead.';
+  if(w.enabled){
+    const when = withinWeekly(w) ? '🔓 Open now — you can turn things off until it closes.'
+                                 : ('🔒 Next opens '+fmtWhen(nextWeeklyStart(w))+'.');
+    s.textContent='Locked all week except '+DAYNAMES[w.day||0]+' '+(w.start||'03:00')+' for '+(w.minutes||1)+' min — the only time anything can be turned off.  '+when;
+  } else {
+    s.textContent='Off — Strict Mode uses its own unlock method instead.';
+  }
 }
 if($('wwSave')) $('wwSave').onclick=async()=>{
   const win={enabled:$('wwEnabled').checked, day:Number($('wwDay').value), start:$('wwStart').value||'03:00', minutes:Math.max(1,Number($('wwMinutes').value)||1)};
