@@ -1,6 +1,8 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const { configDir } = require('../shared/paths');
 const { Store } = require('./store');
 const { Engine } = require('./engine');
 const strict = require('./strict');
@@ -527,17 +529,95 @@ if (gotLock) app.whenReady().then(() => {
     return { ok: true, restart: true };
   });
 
-  // Admin-password vault - same gating as the recovery key (shown only when
-  // Strict Mode is off), so it can't be used to elevate and kill the app mid-lock.
-  ipcMain.handle('admin:setPassword', (_e, pw) => {
-    const s = store.get(); s.adminPassword = String(pw || ''); store.set(s);
-    return { ok: true, has: !!s.adminPassword };
+  // ----- Admin lockdown (Option A) -----
+  // The SYSTEM helper creates a sealed Administrator account, drops the daily
+  // account to Standard, and seals the password where a standard user can't read
+  // it. The app only ever TALKS to the helper through small files in the config
+  // dir; it never stores the password itself.
+  const adminFile = (name) => path.join(configDir(), name);
+  const readAdminJson = (name) => { try { return JSON.parse(fs.readFileSync(adminFile(name), 'utf8')); } catch (e) { return null; } };
+  const currentUser = () => { try { return os.userInfo().username; } catch (e) { return ''; } };
+  // The signed-in user's SID matches reliably even for Microsoft accounts,
+  // where the bare username doesn't match the Administrators membership.
+  const currentUserSid = () => new Promise((res) => {
+    if (process.platform !== 'win32') return res('');
+    try {
+      require('child_process').execFile('whoami', ['/user', '/fo', 'csv', '/nh'], { windowsHide: true }, (err, out) => {
+        if (err || !out) return res('');
+        const m = String(out).match(/S-1-[0-9-]+/);
+        res(m ? m[0] : '');
+      });
+    } catch (e) { res(''); }
   });
-  ipcMain.handle('admin:getPassword', () => {
+
+  // Everything the setup/recovery UI needs in one call.
+  ipcMain.handle('admin:info', () => {
+    if (process.platform !== 'win32') return { supported: false };
     const s = store.get();
-    const has = !!(s.adminPassword && s.adminPassword.length);
-    if (lock.isOn(s.strict)) return { has, locked: true };
-    return { has, locked: false, pw: s.adminPassword || '' };
+    const hb = readAdminJson('helper-alive.json');
+    const helperAlive = !!(hb && hb.t && (Date.now() - hb.t < 15000));
+    const reveal = readAdminJson('reveal.json');
+    const strictOn = lock.isOn(s.strict);
+    return {
+      supported: true,
+      username: currentUser(),
+      account: s.adminAccount || 'AppBlockerAdmin',
+      done: !!s.adminLockdownDone,
+      helperAlive,
+      strictOn,
+      // reveal.json exists only while Strict is off (the helper maintains it).
+      revealable: !strictOn && !!(reveal && reveal.password),
+      pw: (!strictOn && reveal && reveal.password) ? reveal.password : ''
+    };
+  });
+
+  // Ask the helper to create the sealed admin + demote this account to Standard.
+  ipcMain.handle('admin:lockdown', async (_e, { account, password } = {}) => {
+    if (process.platform !== 'win32') return { ok: false, error: 'Windows only' };
+    const s = store.get();
+    if (lock.isOn(s.strict)) return { ok: false, error: 'Turn Strict Mode off before changing admin setup.' };
+    const name = (account || 'AppBlockerAdmin').trim();
+    const sid = await currentUserSid();
+    const id = 'ld-' + Date.now();
+    const cmd = [{ id, type: 'lockdown', account: name, demoteUser: currentUser(), demoteSid: sid, password: String(password || '') }];
+    try { fs.writeFileSync(adminFile('admin-queue.json'), JSON.stringify(cmd)); } catch (e) { return { ok: false, error: String(e.message || e) }; }
+    s.adminAccount = name; store.set(s); // "done" is set only once the helper confirms success
+    return { ok: true, id };
+  });
+
+  // Change the sealed admin password (only allowed while Strict is off).
+  ipcMain.handle('admin:setpw', (_e, { account, password } = {}) => {
+    if (process.platform !== 'win32') return { ok: false, error: 'Windows only' };
+    const s = store.get();
+    if (lock.isOn(s.strict)) return { ok: false, error: 'Turn Strict Mode off first.' };
+    const id = 'pw-' + Date.now();
+    const cmd = [{ id, type: 'setpw', account: (account || s.adminAccount || 'AppBlockerAdmin').trim(), password: String(password || '') }];
+    try { fs.writeFileSync(adminFile('admin-queue.json'), JSON.stringify(cmd)); } catch (e) { return { ok: false, error: String(e.message || e) }; }
+    return { ok: true, id };
+  });
+
+  // Put this account back into Administrators (to uninstall / do admin work).
+  // The helper only runs this while Strict is off, so it can't be used mid-lock.
+  ipcMain.handle('admin:restore', async () => {
+    if (process.platform !== 'win32') return { ok: false, error: 'Windows only' };
+    const s = store.get();
+    if (lock.isOn(s.strict)) return { ok: false, error: 'Turn Strict Mode off first.' };
+    const id = 'pr-' + Date.now();
+    const cmd = [{ id, type: 'promote', user: currentUser(), userSid: await currentUserSid() }];
+    try { fs.writeFileSync(adminFile('admin-queue.json'), JSON.stringify(cmd)); } catch (e) { return { ok: false, error: String(e.message || e) }; }
+    return { ok: true, id };
+  });
+
+  // Poll the result of the last queued admin command.
+  ipcMain.handle('admin:result', (_e, id) => {
+    const r = readAdminJson('admin-result.json');
+    if (!r) return { pending: true };
+    if (id && r.id && r.id !== id) return { pending: true };
+    // Mark lockdown as done only once the helper actually confirms it.
+    if (r.ok && typeof r.id === 'string' && r.id.indexOf('ld-') === 0) {
+      const s = store.get(); if (!s.adminLockdownDone) { s.adminLockdownDone = true; store.set(s); }
+    }
+    return { pending: false, ok: !!r.ok, error: r.err || '' };
   });
 
   // Is the current Windows user a local Administrator? (Drives the setup advice.)

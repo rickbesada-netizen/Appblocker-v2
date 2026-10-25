@@ -44,9 +44,14 @@ contextBridge.exposeInMainWorld('api', {
   getBitlockerKey: () => ipcRenderer.invoke('bitlocker:getKey'),
   uploadKeyPdf: () => ipcRenderer.invoke('bitlocker:uploadKeyPdf'),
   openKeyPdf: () => ipcRenderer.invoke('bitlocker:openKeyPdf'),
-  setAdminPassword: (pw) => ipcRenderer.invoke('admin:setPassword', pw),
-  getAdminPassword: () => ipcRenderer.invoke('admin:getPassword'),
   isAdmin: () => ipcRenderer.invoke('os:isAdmin'),
+
+  // Admin lockdown (Option A) - sealed admin account via the SYSTEM helper
+  adminInfo: () => ipcRenderer.invoke('admin:info'),
+  adminLockdown: (opts) => ipcRenderer.invoke('admin:lockdown', opts),
+  adminSetPw: (opts) => ipcRenderer.invoke('admin:setpw', opts),
+  adminRestore: () => ipcRenderer.invoke('admin:restore'),
+  adminResult: (id) => ipcRenderer.invoke('admin:result', id),
 
   // First-run consent + standard-user setup
   acceptConsent: () => ipcRenderer.invoke('consent:accept'),

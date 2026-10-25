@@ -29,7 +29,7 @@ async function refresh() {
   if (editing) renderListStrict();
   renderConsent();
   if (typeof renderBlKey === 'function') renderBlKey();
-  if (typeof renderAdminPw === 'function') renderAdminPw();
+  if (typeof renderAdminLockdown === 'function') renderAdminLockdown();
   if (typeof renderWeekly === 'function') renderWeekly();
   if (typeof renderFrozen === 'function') renderFrozen();
 }
@@ -40,8 +40,16 @@ function renderConsent(){
   if(state.consentAccepted===false) m.classList.remove('hidden'); else m.classList.add('hidden');
 }
 if($('consentCheck')) $('consentCheck').onchange=(e)=>{ $('consentAgree').disabled=!e.target.checked; };
-if($('consentAgree')) $('consentAgree').onclick=async()=>{ state=await api.acceptConsent(); $('consentModal').classList.add('hidden'); };
-if($('makeStandardUserBtn')) $('makeStandardUserBtn').onclick=()=>{ api.openUserSettings(); };
+if($('consentAgree')) $('consentAgree').onclick=async()=>{
+  state=await api.acceptConsent(); $('consentModal').classList.add('hidden');
+  // First run: if this account is an admin and lockdown isn't set up, walk them through it now.
+  try{
+    if(api.adminInfo && api.isAdmin){
+      const info=await api.adminInfo(); const a=await api.isAdmin();
+      if(info && info.supported && !info.done && a && a.admin && typeof openLockdownWizard==='function'){ openLockdownWizard(); }
+    }
+  }catch{}
+};
 
 // Does the config have any website blocking that NEEDS the browser extension?
 function needsExtension() {
@@ -629,23 +637,7 @@ if($('blPdfOpen')) $('blPdfOpen').onclick=async()=>{
 };
 renderBlKey();
 
-// ---- Admin → Standard-user setup advice ----
-async function renderAdminCard(){
-  if(!api.isAdmin || !$('adminCard')) return;
-  let r; try{ r=await api.isAdmin(); }catch{ return; }
-  $('adminCard').style.display = (r && r.admin) ? '' : 'none';
-}
-if($('adminOpenUsers')) $('adminOpenUsers').onclick=()=>{ api.openUserSettings(); };
-renderAdminCard();
-
-// ---- Admin password vault (shown only when Strict Mode is off) ----
-async function renderAdminPw(){
-  if(!api.getAdminPassword || !$('adminPwStatus')) return;
-  let r; try{ r=await api.getAdminPassword(); }catch{ return; }
-  $('adminPwStatus').textContent = r.has ? '🔑 An admin password is saved.' : 'No admin password saved yet.';
-  const reveal=$('adminPwReveal');
-  if(r.locked){ reveal.textContent = r.has ? '🔒 Hidden while Strict Mode is on. Turn Strict Mode off to view it.' : ''; reveal.style.color='#e5a53b'; }
-}
+// ---- Admin lockdown (Option A): stop even an admin uninstalling it ----
 function genPassword(len){
   // A-Z a-z 2-9 and a few safe symbols; avoids ambiguous chars (0/O/1/l/I).
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%*+=?';
@@ -653,23 +645,111 @@ function genPassword(len){
   let out=''; for(let i=0;i<len;i++) out+=chars[a[i]%chars.length];
   return out;
 }
-if($('adminPwGen')) $('adminPwGen').onclick=()=>{ $('adminPwInput').value=genPassword(20); $('adminPwInput').focus(); };
-if($('adminPwSave')) $('adminPwSave').onclick=async()=>{
-  const v=$('adminPwInput').value;
-  if(!v){ alert('Enter or generate the admin password first.'); return; }
-  await api.setAdminPassword(v);
-  $('adminPwInput').value='';
-  await renderAdminPw();
-  alert('Admin password saved locally on this PC.');
+
+let adminInfoCache=null;
+async function renderAdminLockdown(){
+  const card=$('adminLockdownCard');
+  if(!api.adminInfo || !card) return;
+  let info; try{ info=await api.adminInfo(); }catch{ return; }
+  adminInfoCache=info;
+  if(!info || !info.supported){ card.style.display='none'; return; }
+  let isAdmin=false; try{ const a=await api.isAdmin(); isAdmin=!!(a&&a.admin); }catch{}
+  // Show the card if there's anything to do or manage.
+  card.style.display = (info.done || isAdmin) ? '' : 'none';
+  const setup=$('adminLockSetup'), done=$('adminLockDone'), status=$('adminLockStatus');
+  if(info.done){
+    setup.style.display='none'; done.style.display='';
+    status.textContent = info.helperAlive ? '🔒 Admin lockdown is active on this PC.' : '🔒 Admin lockdown is set (protection service starting…).';
+    // Reveal availability
+    const rt=$('adminRevealText');
+    if(info.strictOn){ rt.textContent='🔒 Hidden while Strict Mode is on — turn Strict Mode off to see it.'; rt.style.color='#e5a53b'; }
+    else if(rt.dataset.shown!=='1'){ rt.textContent=''; }
+  } else {
+    setup.style.display=''; done.style.display='none';
+    status.textContent = isAdmin ? '⚠ Your everyday account is an Administrator — set this up to lock it.' : '';
+  }
+}
+
+// ----- Guided wizard -----
+let ldPassword='';
+function ldShow(step){ ['ldStep1','ldStep2','ldStep3'].forEach(s=>{ if($(s)) $(s).style.display = (s===step)?'':'none'; }); }
+async function openLockdownWizard(){
+  const m=$('lockdownModal'); if(!m) return;
+  // Warn if the protection service isn't alive yet (lockdown needs it).
+  let info; try{ info=await api.adminInfo(); }catch{}
+  if($('ldHelperWarn')) $('ldHelperWarn').style.display = (info && info.helperAlive)?'none':'';
+  ldShow('ldStep1'); m.classList.remove('hidden');
+}
+function closeLockdownWizard(){ const m=$('lockdownModal'); if(m) m.classList.add('hidden'); }
+
+if($('ldCancel1')) $('ldCancel1').onclick=closeLockdownWizard;
+if($('ldNext1')) $('ldNext1').onclick=()=>{
+  ldPassword=genPassword(20);
+  if($('ldPwText')) $('ldPwText').textContent=ldPassword;
+  if($('ldSaved')) $('ldSaved').checked=false;
+  if($('ldNext2')) $('ldNext2').disabled=true;
+  ldShow('ldStep2');
 };
-if($('adminPwShow')) $('adminPwShow').onclick=async()=>{
-  const r=await api.getAdminPassword();
-  const reveal=$('adminPwReveal');
-  if(!r.has){ reveal.textContent='No admin password saved yet.'; reveal.style.color='#9a9ab0'; return; }
-  if(r.locked){ reveal.textContent='🔒 Hidden while Strict Mode is on. Turn Strict Mode off to view it.'; reveal.style.color='#e5a53b'; return; }
-  reveal.textContent='Admin password: '+r.pw; reveal.style.color='#36c17a';
+if($('ldBack2')) $('ldBack2').onclick=()=>ldShow('ldStep1');
+if($('ldSaved')) $('ldSaved').onchange=(e)=>{ if($('ldNext2')) $('ldNext2').disabled=!e.target.checked; };
+if($('ldCopyPw')) $('ldCopyPw').onclick=()=>{ try{ navigator.clipboard.writeText(ldPassword); $('ldCopyPw').textContent='Copied'; setTimeout(()=>{$('ldCopyPw').textContent='Copy';},1500); }catch{} };
+if($('ldNext2')) $('ldNext2').onclick=async()=>{
+  ldShow('ldStep3');
+  if($('ldResultTitle')) $('ldResultTitle').textContent='Setting it up…';
+  if($('ldResultText')) $('ldResultText').textContent='Creating the admin account and switching you to a standard user. This takes a few seconds.';
+  if($('ldDone')) $('ldDone').style.display='none';
+  const r=await api.adminLockdown({ account:'AppBlockerAdmin', password:ldPassword });
+  if(!r||!r.ok){ ldResult(false, (r&&r.error)||'Could not start.'); return; }
+  pollAdminResult(r.id, (ok,err)=>ldResult(ok,err));
 };
-renderAdminPw();
+function ldResult(ok,err){
+  if($('ldResultTitle')) $('ldResultTitle').textContent = ok ? '✅ Done — you\'re locked in' : '⚠ Couldn\'t finish';
+  if($('ldResultText')) $('ldResultText').textContent = ok
+    ? 'Your everyday account is now a Standard user, and the admin password is sealed. While Strict Mode is on, AppBlocker can\'t be uninstalled. Sign out and back in once to finish applying it.'
+    : ('Nothing was changed. '+(err||'')+' Make sure the protection service is running, then try again.');
+  if($('ldDone')) $('ldDone').style.display='';
+  renderAdminLockdown();
+}
+if($('ldDone')) $('ldDone').onclick=closeLockdownWizard;
+if($('adminLockStart')) $('adminLockStart').onclick=openLockdownWizard;
+
+// Poll the result of a queued admin command (helper runs on its ~3s tick).
+function pollAdminResult(id, cb){
+  let tries=0;
+  const iv=setInterval(async()=>{
+    tries++;
+    let r; try{ r=await api.adminResult(id); }catch{ r=null; }
+    if(r && !r.pending){ clearInterval(iv); cb(!!r.ok, r.error||''); }
+    else if(tries>16){ clearInterval(iv); cb(false, 'Timed out waiting for the protection service.'); }
+  }, 1500);
+}
+
+// ----- Recovery actions (shown once lockdown is done) -----
+if($('adminRevealBtn')) $('adminRevealBtn').onclick=async()=>{
+  const rt=$('adminRevealText');
+  let info; try{ info=await api.adminInfo(); }catch{}
+  if(!info){ return; }
+  if(info.strictOn){ rt.textContent='🔒 Hidden while Strict Mode is on — turn Strict Mode off to see it.'; rt.style.color='#e5a53b'; rt.dataset.shown='0'; return; }
+  if(info.revealable && info.pw){ rt.textContent='Admin account: '+info.account+'   Password: '+info.pw; rt.style.color='#36c17a'; rt.dataset.shown='1'; }
+  else { rt.textContent='Not available yet — the protection service may still be starting.'; rt.style.color='#9a9ab0'; }
+};
+if($('adminOwnPwSave')) $('adminOwnPwSave').onclick=async()=>{
+  const v=$('adminOwnPw').value.trim();
+  if(v.length<8){ $('adminLockMsg').textContent='Use at least 8 characters.'; return; }
+  $('adminLockMsg').textContent='Updating…';
+  const r=await api.adminSetPw({ password:v });
+  if(!r||!r.ok){ $('adminLockMsg').textContent=(r&&r.error)||'Failed.'; return; }
+  pollAdminResult(r.id,(ok,err)=>{ $('adminOwnPw').value=''; $('adminLockMsg').textContent = ok?'✅ Admin password updated.':('⚠ '+(err||'Failed.')); renderAdminLockdown(); });
+};
+if($('adminRestoreBtn')) $('adminRestoreBtn').onclick=async()=>{
+  $('adminLockMsg').textContent='Restoring…';
+  const r=await api.adminRestore();
+  if(!r||!r.ok){ $('adminLockMsg').textContent=(r&&r.error)||'Turn Strict Mode off first.'; return; }
+  pollAdminResult(r.id,(ok,err)=>{ $('adminLockMsg').textContent = ok
+    ? '✅ Your account has admin rights again. Sign out and back in, then you can uninstall from Settings › Apps.'
+    : ('⚠ '+(err||'Failed.')); });
+};
+renderAdminLockdown();
 
 // ---- Account & sync (Supabase) ----
 const PLAT_ICON={ windows:'🪟', macos:'🍎', android:'📱', ios:'📱', linux:'🐧' };

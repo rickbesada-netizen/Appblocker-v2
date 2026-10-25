@@ -118,40 +118,42 @@
     <section id="settings" class="panel">
       <h2>Settings</h2>
 
-      <div class="card" id="adminCard" style="display:none; border:1px solid #7a5a1e; background:#2a2010">
-        <h3>⚠ You're running as an Administrator</h3>
-        <p class="muted">AppBlocker is much stronger when your <b>everyday account is a Standard user</b>, with a
-          separate Administrator account you only use when needed. As an admin, you can undo the blocks yourself —
-          as a standard user you can't (no editing the hosts file, no Safe Mode, no removing the extension).</p>
-        <p class="muted">You keep admin power either way: from a standard account, right-click any installer or
-          dev tool → <b>Run as administrator</b> and enter the admin password. Your coding still works; the blocks
-          just can't be casually bypassed.</p>
-        <ol class="muted" style="line-height:1.7; margin:4px 0 0 18px">
-          <li>Open Windows user accounts (button below).</li>
-          <li>Add a <b>new account</b> → make it an <b>Administrator</b> (give it a password you keep separate).</li>
-          <li>Change <b>your daily account</b> to <b>Standard user</b>.</li>
-          <li>Sign in to your Standard account for everyday use.</li>
-        </ol>
-        <button id="adminOpenUsers" class="btn-outline small" style="margin-top:10px">Open Windows user accounts</button>
-      </div>
+      <!-- Admin lockdown (Option A): stop even an admin uninstalling it -->
+      <div class="card" id="adminLockdownCard" style="display:none">
+        <h3>🔒 Stop yourself uninstalling it</h3>
+        <p id="adminLockStatus" class="muted"></p>
 
-      <div class="card" id="adminPwCard">
-        <h3>Admin password vault</h3>
-        <p class="muted">Set a <b>strong Administrator password you don't memorise</b>, then save it here. It's
-          <b>hidden while Strict Mode is on</b> and shown again once Strict Mode is off — so during a locked week you
-          can't elevate to admin to turn AppBlocker off, but you never lose the password. <b>Stored locally on this PC only</b> — never uploaded anywhere.</p>
-        <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap">
-          <input id="adminPwInput" type="text" placeholder="Paste or generate the admin account password" style="flex:1; min-width:220px" />
-          <button id="adminPwGen" class="btn-outline small">Generate 20-char</button>
+        <!-- Not set up yet -->
+        <div id="adminLockSetup">
+          <p class="muted">Right now your everyday account is an <b>Administrator</b>, so you could just uninstall
+            AppBlocker whenever you wanted — that defeats the point. This sets up the proper lock for you:</p>
+          <ul class="muted" style="line-height:1.7; margin:4px 0 0 18px">
+            <li>Creates a separate hidden <b>admin account</b> with a random password you don't know.</li>
+            <li>Turns your everyday account into a <b>Standard user</b> — same login, same files, nothing moves.</li>
+            <li>While Strict Mode is on, uninstalling asks for that admin password, which is sealed away — so it can't be removed.</li>
+            <li>When Strict Mode is off, the app shows you the password again so you can uninstall or install anything.</li>
+          </ul>
+          <p class="muted" style="margin-top:8px">Your coding and app builds still work normally as a standard user. Only
+            <b>installing new system-wide software</b> asks for the admin password — which you have whenever Strict Mode is off.</p>
+          <button id="adminLockStart" class="btn-primary" style="margin-top:12px">Set up admin lockdown</button>
         </div>
-        <div class="row-between mt">
-          <span id="adminPwStatus" class="muted"></span>
-          <span>
-            <button id="adminPwSave" class="btn-outline small">Save password</button>
-            <button id="adminPwShow" class="btn-outline small">Show saved password</button>
-          </span>
+
+        <!-- Already set up: recovery actions -->
+        <div id="adminLockDone" style="display:none">
+          <p class="muted">Your everyday account is a <b>Standard user</b>. While Strict Mode is on, nobody can uninstall
+            AppBlocker without the sealed admin password.</p>
+          <div id="adminRevealWrap" class="mt">
+            <button id="adminRevealBtn" class="btn-outline small">Show the admin password</button>
+            <p id="adminRevealText" class="muted" style="font-weight:600; word-break:break-all; margin-top:8px"></p>
+          </div>
+          <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px">
+            <input id="adminOwnPw" type="text" placeholder="Type your own admin password (optional)" style="flex:1; min-width:220px" />
+            <button id="adminOwnPwSave" class="btn-outline small">Set my own password</button>
+          </div>
+          <p class="muted" style="margin-top:12px">Want to uninstall or do admin work? Turn Strict Mode off, then:</p>
+          <button id="adminRestoreBtn" class="btn-outline small">Give my account admin rights back</button>
+          <p id="adminLockMsg" class="muted" style="margin-top:8px"></p>
         </div>
-        <p id="adminPwReveal" class="muted" style="font-weight:600; word-break:break-all"></p>
       </div>
 
       <div class="card" id="cloudCard">
@@ -342,9 +344,9 @@
         window</b> — the time you set when Strict Mode can be turned off. That window is when the app can be
         removed. Windows' own recovery (Reset / repair) is never disabled, and an administrator can always
         remove the app.</p>
-      <p class="muted">For the Safe-Mode protection to work, use a <b>Standard user account</b> for daily use,
-        with a separate Administrator account.</p>
-      <button id="makeStandardUserBtn" class="btn-outline small">Open Windows user accounts</button>
+      <p class="muted">For the strongest protection your everyday account should be a <b>Standard user</b>, with the
+        admin password sealed away. <b>AppBlocker can set this up for you automatically in the next step</b> — you don't
+        have to change any Windows settings by hand.</p>
 
       <label class="switch-row" style="margin-top:14px">
         <span>I understand and agree to how AppBlocker protects itself.</span>
@@ -353,6 +355,63 @@
       <div class="row-between mt">
         <span></span>
         <button id="consentAgree" class="btn-primary" disabled>Agree &amp; continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guided admin-lockdown wizard (first run + Settings button) -->
+  <div id="lockdownModal" class="modal hidden">
+    <div class="modal-card">
+      <!-- Step 1: explain -->
+      <div id="ldStep1">
+        <h2>Lock it so you can't uninstall it</h2>
+        <p class="muted">To make AppBlocker a real commitment, the account you use every day shouldn't be able to
+          remove it on a whim. Here's what this does — it's all automatic:</p>
+        <ul class="muted" style="line-height:1.8; margin:6px 0 0 18px">
+          <li>Makes a separate hidden <b>admin account</b> with a random password.</li>
+          <li>Turns <b>your account into a Standard user</b> — you keep the same login, password, files and apps. Nothing is moved or deleted.</li>
+          <li>From then on, uninstalling AppBlocker needs that admin password.</li>
+          <li>While Strict Mode is <b>on</b>, the password is sealed away → it can't be uninstalled.</li>
+          <li>While Strict Mode is <b>off</b>, the app shows you the password → you're in full control.</li>
+        </ul>
+        <p class="muted" style="margin-top:10px">You can still code and build apps normally. Only installing new
+          system software asks for the password, which you always have when Strict Mode is off.</p>
+        <p id="ldHelperWarn" class="muted" style="display:none; color:#e5a53b; margin-top:10px">⚠ The background protection
+          service isn't running yet. Reopen AppBlocker (allow it when Windows asks) and try again.</p>
+        <div class="row-between mt">
+          <button id="ldCancel1" class="btn-outline small">Not now</button>
+          <button id="ldNext1" class="btn-primary">Continue</button>
+        </div>
+      </div>
+
+      <!-- Step 2: save the password -->
+      <div id="ldStep2" style="display:none">
+        <h2>Save this admin password</h2>
+        <p class="muted">This is the password for the hidden admin account. <b>Write it down or save it somewhere safe
+          now</b> — like a password manager. You'll need it to uninstall or do admin tasks later. (The app can also show
+          it to you any time Strict Mode is off, so you won't be locked out.)</p>
+        <div class="card" style="margin-top:8px; text-align:center">
+          <p id="ldPwText" style="font-size:20px; font-weight:700; letter-spacing:1px; word-break:break-all; margin:6px 0"></p>
+          <button id="ldCopyPw" class="btn-outline small">Copy</button>
+        </div>
+        <label class="switch-row" style="margin-top:14px">
+          <span>I've saved this password somewhere safe.</span>
+          <input id="ldSaved" type="checkbox" />
+        </label>
+        <div class="row-between mt">
+          <button id="ldBack2" class="btn-outline small">Back</button>
+          <button id="ldNext2" class="btn-primary" disabled>Lock it down</button>
+        </div>
+      </div>
+
+      <!-- Step 3: working / result -->
+      <div id="ldStep3" style="display:none">
+        <h2 id="ldResultTitle">Setting it up…</h2>
+        <p id="ldResultText" class="muted">Creating the admin account and switching you to a standard user. This takes a few seconds.</p>
+        <div class="row-between mt">
+          <span></span>
+          <button id="ldDone" class="btn-primary" style="display:none">Done</button>
+        </div>
       </div>
     </div>
   </div>

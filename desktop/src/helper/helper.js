@@ -9,6 +9,7 @@
 //
 // It intentionally does NOT kill apps - that's the UI's job while it's open.
 const fs = require('fs');
+const path = require('path');
 const { configFile } = require('../shared/paths');
 const { listActive } = require('../shared/schedule');
 const safedns = require('../shared/safedns');
@@ -17,6 +18,9 @@ const hosts = require('../main/hosts');
 const bitlocker = require('../main/bitlocker');
 const selfdefense = require('./selfdefense');
 const frozen = require('./frozen');
+const accounts = require('./accounts');
+
+const CONFIG_DIR = path.dirname(configFile());
 
 let lastBitlocker = 0;
 
@@ -40,6 +44,9 @@ function desiredDomains(cfg) {
 function tick() {
   try {
     const cfg = readConfig();
+    // Admin-lockdown worker + heartbeat. Runs even when cfg is briefly null
+    // (it treats that as locked, so it never leaks the password mid-write).
+    accounts.tick(cfg, CONFIG_DIR).catch(() => {});
     if (!cfg) return; // config briefly unreadable (mid-write) - keep what's there
     hosts.applyDomains(desiredDomains(cfg));
     safedns.sync(!!cfg.adultFilter);
