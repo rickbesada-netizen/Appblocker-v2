@@ -64,6 +64,8 @@ contextBridge.exposeInMainWorld('api', {
   cloudSignOut: () => ipcRenderer.invoke('cloud:signout'),
   cloudDevices: () => ipcRenderer.invoke('cloud:devices'),
   cloudSend: (type, target) => ipcRenderer.invoke('cloud:send', { type, target }),
+  cloudRemoveDevice: (id) => ipcRenderer.invoke('cloud:removeDevice', id),
+  cloudRemoveOthers: () => ipcRenderer.invoke('cloud:removeOthers'),
   cloudSetKeys: (url, anonKey) => ipcRenderer.invoke('cloud:setkeys', { url, anonKey }),
   onCloudChanged: (cb) => ipcRenderer.on('cloud:changed', () => cb())
 });

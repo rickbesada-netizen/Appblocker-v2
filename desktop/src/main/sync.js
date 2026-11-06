@@ -152,13 +152,40 @@ async function registerDevice() {
   try {
     if (deviceId) {
       await supa.from('devices').update({ last_seen: new Date().toISOString() }).eq('id', deviceId);
-    } else {
-      const { data } = await supa.from('devices')
-        .insert({ user_id: uid(), name: deviceName(), platform: platform() })
-        .select().single();
-      if (data) { deviceId = data.id; try { fs.writeFileSync(idFile, JSON.stringify({ id: deviceId })); } catch (e) {} }
+      return;
     }
+    // No saved id (fresh install). Reuse an existing row for this same
+    // machine+platform instead of piling up a new one every launch.
+    try {
+      const { data: existing } = await supa.from('devices')
+        .select('id').eq('user_id', uid()).eq('name', deviceName()).eq('platform', platform()).limit(1);
+      if (existing && existing.length) {
+        deviceId = existing[0].id;
+        await supa.from('devices').update({ last_seen: new Date().toISOString() }).eq('id', deviceId);
+        try { fs.writeFileSync(idFile, JSON.stringify({ id: deviceId })); } catch (e) {}
+        return;
+      }
+    } catch (e) {}
+    const { data } = await supa.from('devices')
+      .insert({ user_id: uid(), name: deviceName(), platform: platform() })
+      .select().single();
+    if (data) { deviceId = data.id; try { fs.writeFileSync(idFile, JSON.stringify({ id: deviceId })); } catch (e) {} }
   } catch (e) {}
+}
+
+// Remove one device row (can't remove this device from here).
+async function removeDevice(id) {
+  if (!supa || !uid()) return { error: 'Not signed in' };
+  if (!id || id === deviceId) return { error: 'Can\'t remove this device' };
+  try { await supa.from('devices').delete().eq('user_id', uid()).eq('id', id); return { ok: true }; }
+  catch (e) { return { error: String(e && e.message || e) }; }
+}
+
+// Remove every device except this one (clears duplicate/old registrations).
+async function removeOtherDevices() {
+  if (!supa || !uid()) return { error: 'Not signed in' };
+  try { await supa.from('devices').delete().eq('user_id', uid()).neq('id', deviceId || '00000000-0000-0000-0000-000000000000'); return { ok: true }; }
+  catch (e) { return { error: String(e && e.message || e) }; }
 }
 
 // ---- Config sync ----
@@ -233,5 +260,5 @@ async function sendCommand(type, targetDevice) {
 
 module.exports = {
   init, status, signIn, signUp, signOut,
-  pushConfig, pullConfig, listDevices, sendCommand, configured
+  pushConfig, pullConfig, listDevices, sendCommand, removeDevice, removeOtherDevices, configured
 };

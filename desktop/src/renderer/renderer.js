@@ -44,9 +44,9 @@ if($('consentAgree')) $('consentAgree').onclick=async()=>{
   state=await api.acceptConsent(); $('consentModal').classList.add('hidden');
   // First run: if this account is an admin and lockdown isn't set up, walk them through it now.
   try{
-    if(api.adminInfo && api.isAdmin){
-      const info=await api.adminInfo(); const a=await api.isAdmin();
-      if(info && info.supported && !info.done && a && a.admin && typeof openLockdownWizard==='function'){ openLockdownWizard(); }
+    if(api.adminInfo){
+      const info=await api.adminInfo();
+      if(info && info.supported && !info.done && typeof openLockdownWizard==='function'){ openLockdownWizard(); }
     }
   }catch{}
 };
@@ -652,10 +652,11 @@ async function renderAdminLockdown(){
   if(!api.adminInfo || !card) return;
   let info; try{ info=await api.adminInfo(); }catch{ return; }
   adminInfoCache=info;
+  // Always show on Windows. (The app runs un-elevated, so we can't reliably
+  // detect admin here - and showing the setup never hurts: a standard user who
+  // runs it just creates the sealed admin.)
   if(!info || !info.supported){ card.style.display='none'; return; }
-  let isAdmin=false; try{ const a=await api.isAdmin(); isAdmin=!!(a&&a.admin); }catch{}
-  // Show the card if there's anything to do or manage.
-  card.style.display = (info.done || isAdmin) ? '' : 'none';
+  card.style.display='';
   const setup=$('adminLockSetup'), done=$('adminLockDone'), status=$('adminLockStatus');
   if(info.done){
     setup.style.display='none'; done.style.display='';
@@ -666,7 +667,7 @@ async function renderAdminLockdown(){
     else if(rt.dataset.shown!=='1'){ rt.textContent=''; }
   } else {
     setup.style.display=''; done.style.display='none';
-    status.textContent = isAdmin ? '⚠ Your everyday account is an Administrator — set this up to lock it.' : '';
+    status.textContent = '';
   }
 }
 
@@ -764,17 +765,22 @@ async function renderCloud(){
     $('cloudWho').textContent = st.email || '(account)';
     let devs=[]; try{ devs=await api.cloudDevices(); }catch{}
     const box=$('cloudDevices');
-    box.innerHTML = devs.length ? devs.map(d=>{
+    const others = devs.filter(d=>!d.isThis).length;
+    box.innerHTML = devs.length ? (devs.map(d=>{
       const icon=PLAT_ICON[d.platform]||'💻';
       const me = d.isThis ? ' <span class="muted">(this device)</span>' : '';
       const btns = d.isThis ? '' :
         `<button class="btn-outline small" data-strict="${d.id}">Strict on</button>
-         <button class="btn-outline small" data-lock="${d.id}">Lock all</button>`;
+         <button class="btn-outline small" data-lock="${d.id}">Lock all</button>
+         <button class="btn-outline small" data-remove="${d.id}" title="Remove this device" style="color:#e06a6a">Remove</button>`;
       return `<div class="row-between" style="padding:6px 0;border-bottom:1px solid #191922">
         <span>${icon} <b>${d.name||'Device'}</b>${me}</span><span>${btns}</span></div>`;
-    }).join('') : '<span class="muted">No other devices yet. Sign in on your phone to see it here.</span>';
+    }).join('') + (others>1 ? `<div class="row-between" style="padding:8px 0"><span class="muted">${others} other devices (remove duplicates/old ones here)</span><button id="cloudRemoveOthers" class="btn-outline small" style="color:#e06a6a">Remove all other devices</button></div>` : ''))
+      : '<span class="muted">No other devices yet. Sign in on your phone to see it here.</span>';
     box.querySelectorAll('[data-strict]').forEach(b=> b.onclick=async()=>{ await api.cloudSend('strict_on', b.dataset.strict); alert('Strict Mode command sent.'); });
     box.querySelectorAll('[data-lock]').forEach(b=> b.onclick=async()=>{ await api.cloudSend('lock_all', b.dataset.lock); alert('Lock command sent.'); });
+    box.querySelectorAll('[data-remove]').forEach(b=> b.onclick=async()=>{ if(!confirm('Remove this device from your account?')) return; await api.cloudRemoveDevice(b.dataset.remove); await renderCloud(); });
+    const ro=$('cloudRemoveOthers'); if(ro) ro.onclick=async()=>{ if(!confirm('Remove ALL devices except this one? (They re-appear if they sign in again.)')) return; await api.cloudRemoveOthers(); await renderCloud(); };
   }
 }
 if($('cloudSignIn')) $('cloudSignIn').onclick=async()=>{

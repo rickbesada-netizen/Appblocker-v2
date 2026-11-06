@@ -90,18 +90,40 @@ object CloudSync {
 
     private suspend fun registerDevice() {
         val user = uid ?: return
-        if (deviceId == null) {
-            val inserted = client.from("devices").insert(buildJsonObject {
-                put("user_id", user); put("name", Build.MODEL ?: "Android phone"); put("platform", "android")
-            }) { select() }.decodeSingleOrNull<DeviceRow>()
-            deviceId = inserted?.id
-            prefs.edit().putString("device_id", deviceId).apply()
-        } else {
+        val name = Build.MODEL ?: "Android phone"
+        if (deviceId != null) {
             runCatching {
                 client.from("devices").update(buildJsonObject { put("last_seen", nowIso()) }) {
                     filter { eq("id", deviceId!!) }
                 }
             }
+            return
+        }
+        // No saved id. Reuse an existing row for this same phone instead of
+        // inserting a duplicate on every launch (which piled up many rows).
+        val existing = runCatching {
+            client.from("devices").select {
+                filter { eq("user_id", user); eq("name", name); eq("platform", "android") }
+            }.decodeList<DeviceRow>().firstOrNull()
+        }.getOrNull()
+        if (existing != null) {
+            deviceId = existing.id
+            prefs.edit().putString("device_id", deviceId).apply()
+            runCatching {
+                client.from("devices").update(buildJsonObject { put("last_seen", nowIso()) }) {
+                    filter { eq("id", deviceId!!) }
+                }
+            }
+            return
+        }
+        val inserted = runCatching {
+            client.from("devices").insert(buildJsonObject {
+                put("user_id", user); put("name", name); put("platform", "android")
+            }) { select() }.decodeSingleOrNull<DeviceRow>()
+        }.getOrNull()
+        if (inserted?.id != null) {
+            deviceId = inserted.id
+            prefs.edit().putString("device_id", deviceId).apply()
         }
     }
 

@@ -524,6 +524,8 @@ if (gotLock) app.whenReady().then(() => {
   ipcMain.handle('cloud:signout', () => sync.signOut());
   ipcMain.handle('cloud:devices', () => sync.listDevices());
   ipcMain.handle('cloud:send', (_e, { type, target }) => sync.sendCommand(type, target));
+  ipcMain.handle('cloud:removeDevice', (_e, id) => sync.removeDevice(id));
+  ipcMain.handle('cloud:removeOthers', () => sync.removeOtherDevices());
   ipcMain.handle('cloud:setkeys', (_e, { url, anonKey }) => {
     const s = store.get(); s.cloudUrl = (url || '').trim(); s.cloudAnonKey = (anonKey || '').trim(); store.set(s);
     return { ok: true, restart: true };
