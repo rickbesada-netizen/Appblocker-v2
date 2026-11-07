@@ -83,6 +83,11 @@ switch ($Action) {
         try { Remove-LocalGroupMember -Group $adminGroup -Member $target -ErrorAction Stop } catch {}
       }
     }
+    # Record what we changed (not secret) so uninstall can put it back exactly.
+    if ($ConfigDir -ne "") {
+      $state = @{ sealedAdmin = $Account; demotedUser = $DemoteUser; demotedSid = $DemoteSid } | ConvertTo-Json -Compress
+      Set-Content -Path (Join-Path $ConfigDir "lockdown-state.json") -Value $state -Encoding UTF8 -Force
+    }
     Write-Output "ok"
   }
 

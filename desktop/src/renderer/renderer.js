@@ -687,13 +687,29 @@ if($('ldCancel1')) $('ldCancel1').onclick=closeLockdownWizard;
 if($('ldNext1')) $('ldNext1').onclick=()=>{
   ldPassword=genPassword(20);
   if($('ldPwText')) $('ldPwText').textContent=ldPassword;
-  if($('ldSaved')) $('ldSaved').checked=false;
+  if($('ldConfirm')) $('ldConfirm').value='';
+  if($('ldMatch')) $('ldMatch').textContent='';
   if($('ldNext2')) $('ldNext2').disabled=true;
   ldShow('ldStep2');
 };
 if($('ldBack2')) $('ldBack2').onclick=()=>ldShow('ldStep1');
-if($('ldSaved')) $('ldSaved').onchange=(e)=>{ if($('ldNext2')) $('ldNext2').disabled=!e.target.checked; };
+// Gate "Lock it down" on pasting the password back correctly (proves it's saved).
+if($('ldConfirm')) $('ldConfirm').oninput=(e)=>{
+  const ok = e.target.value === ldPassword && ldPassword.length>0;
+  if($('ldMatch')){ $('ldMatch').textContent = e.target.value ? (ok?'✓ matches':'✗ no match') : ''; $('ldMatch').style.color = ok?'#36c17a':'#e06a6a'; }
+  if($('ldNext2')) $('ldNext2').disabled=!ok;
+};
 if($('ldCopyPw')) $('ldCopyPw').onclick=()=>{ try{ navigator.clipboard.writeText(ldPassword); $('ldCopyPw').textContent='Copied'; setTimeout(()=>{$('ldCopyPw').textContent='Copy';},1500); }catch{} };
+// Save the password to a text file the user chooses.
+if($('ldSavePw')) $('ldSavePw').onclick=()=>{
+  try{
+    const body='AppBlocker admin account\r\nUser: AppBlockerAdmin\r\nPassword: '+ldPassword+'\r\n\r\nKeep this safe. You need it to uninstall AppBlocker or do admin tasks.\r\n';
+    const blob=new Blob([body],{type:'text/plain'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='AppBlocker-admin-password.txt';
+    document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    $('ldSavePw').textContent='Saved'; setTimeout(()=>{$('ldSavePw').textContent='Save to a file';},1500);
+  }catch(e){}
+};
 if($('ldNext2')) $('ldNext2').onclick=async()=>{
   ldShow('ldStep3');
   if($('ldResultTitle')) $('ldResultTitle').textContent='Setting it up…';

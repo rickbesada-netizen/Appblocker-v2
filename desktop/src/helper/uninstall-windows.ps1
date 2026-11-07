@@ -25,4 +25,29 @@ foreach ($k in @(
 }
 reg delete "HKLM\SOFTWARE\Policies\Mozilla\Firefox\ExtensionSettings\appblocker@local" /f 2>$null | Out-Null
 
-Write-Host "AppBlocker helper removed and all protections released."
+# 5) Undo the admin lockdown: put the previous administrator back and delete the
+#    sealed AppBlockerAdmin account, so the machine returns to how it was before.
+$cfgDir = Join-Path $env:ProgramData 'AppBlocker'
+$stateFile = Join-Path $cfgDir 'lockdown-state.json'
+if (Test-Path $stateFile) {
+  try {
+    $st = Get-Content $stateFile -Raw | ConvertFrom-Json
+    $adminGroup = (Get-LocalGroup -SID 'S-1-5-32-544').Name
+    # Re-promote whoever we demoted (prefer SID, so Microsoft accounts match too).
+    $target = $null
+    if ($st.demotedSid) { try { $target = [System.Security.Principal.SecurityIdentifier]$st.demotedSid } catch { $target = $null } }
+    if (-not $target -and $st.demotedUser) { $target = $st.demotedUser }
+    if ($target) { try { Add-LocalGroupMember -Group $adminGroup -Member $target -ErrorAction SilentlyContinue } catch {} }
+    # Delete the sealed admin account we created.
+    if ($st.sealedAdmin) { Remove-LocalUser -Name $st.sealedAdmin -ErrorAction SilentlyContinue }
+  } catch {}
+}
+
+# 6) Remove all AppBlocker data (sealed password, config) so nothing is left behind.
+if (Test-Path $cfgDir) {
+  takeown /f $cfgDir /r /d y 2>$null | Out-Null
+  icacls $cfgDir /reset /t /c 2>$null | Out-Null
+  Remove-Item -Path $cfgDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host "AppBlocker helper removed, admin lockdown reverted, and all protections released."
