@@ -23,9 +23,7 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
-  });
+  app.on('second-instance', () => { showWindow(); });
 }
 
 let win = null;
@@ -187,6 +185,16 @@ function createWindow() {
   win.on('close', (e) => {
     if (anyLockOn() && !app.isQuitting) { e.preventDefault(); win.hide(); }
   });
+  // When the window is actually destroyed (closed while unlocked), forget it so
+  // the next "open" rebuilds it instead of touching a destroyed object.
+  win.on('closed', () => { win = null; });
+}
+
+// Always-safe way to bring the app forward: rebuild the window if it was closed.
+function showWindow() {
+  if (!win || win.isDestroyed()) { createWindow(); return; }
+  if (win.isMinimized()) win.restore();
+  win.show(); win.focus();
 }
 
 function buildTray() {
@@ -196,17 +204,17 @@ function buildTray() {
   tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
   tray.setToolTip('AppBlocker');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open AppBlocker', click: () => win.show() },
+    { label: 'Open AppBlocker', click: () => showWindow() },
     { type: 'separator' },
     {
       label: 'Quit',
       click: () => {
-        if (anyLockOn()) { win.show(); return; } // locked -> can't just quit
+        if (anyLockOn()) { showWindow(); return; } // locked -> can't just quit
         app.isQuitting = true; app.quit();
       }
     }
   ]));
-  tray.on('click', () => win.show());
+  tray.on('click', () => showWindow());
 }
 
 if (gotLock) app.whenReady().then(() => {
