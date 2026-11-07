@@ -774,6 +774,15 @@ if($('adminRelockBtn')) $('adminRelockBtn').onclick=async()=>{
     ? '✅ Your account is a Standard user again — AppBlocker is locked down. Sign out and back in to finish applying it.'
     : ('⚠ '+(err||'Failed.')); renderAdminLockdown(); });
 };
+if($('adminTeardownBtn')) $('adminTeardownBtn').onclick=async()=>{
+  if(!confirm('Delete the AppBlockerAdmin account from this PC and give your account admin back? Strict Mode must be off.')) return;
+  $('adminLockMsg').textContent='Removing the account…';
+  const r=await api.adminTeardown();
+  if(!r||!r.ok){ $('adminLockMsg').textContent=(r&&r.error)||'Turn Strict Mode off first.'; return; }
+  pollAdminResult(r.id,(ok,err)=>{ $('adminLockMsg').textContent = ok
+    ? '✅ Done. The AppBlockerAdmin account is deleted and your account has admin again. Sign out and back in to finish.'
+    : ('⚠ '+(err||'Failed.')); renderAdminLockdown(); });
+};
 renderAdminLockdown();
 
 // ---- Account & sync (Supabase) ----

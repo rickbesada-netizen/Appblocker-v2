@@ -634,6 +634,18 @@ if (gotLock) app.whenReady().then(() => {
     return { ok: true, id };
   });
 
+  // Fully remove the lockdown: delete the AppBlockerAdmin account and give this
+  // account admin back. Setup can be redone later. Only while Strict is off.
+  ipcMain.handle('admin:teardown', async () => {
+    if (process.platform !== 'win32') return { ok: false, error: 'Windows only' };
+    const s = store.get();
+    if (lock.isOn(s.strict)) return { ok: false, error: 'Turn Strict Mode off first.' };
+    const id = 'td-' + Date.now();
+    const cmd = [{ id, type: 'teardown', account: s.adminAccount || 'AppBlockerAdmin', demoteUser: currentUser(), demoteSid: await currentUserSid() }];
+    try { fs.writeFileSync(adminFile('admin-queue.json'), JSON.stringify(cmd)); } catch (e) { return { ok: false, error: String(e.message || e) }; }
+    return { ok: true, id };
+  });
+
   // Poll the result of the last queued admin command.
   ipcMain.handle('admin:result', (_e, id) => {
     const r = readAdminJson('admin-result.json');
@@ -642,6 +654,10 @@ if (gotLock) app.whenReady().then(() => {
     // Mark lockdown as done only once the helper actually confirms it.
     if (r.ok && typeof r.id === 'string' && r.id.indexOf('ld-') === 0) {
       const s = store.get(); if (!s.adminLockdownDone) { s.adminLockdownDone = true; store.set(s); }
+    }
+    // Teardown confirmed: the account is gone, so the card returns to setup.
+    if (r.ok && typeof r.id === 'string' && r.id.indexOf('td-') === 0) {
+      const s = store.get(); s.adminLockdownDone = false; s.adminRestored = false; store.set(s);
     }
     return { pending: false, ok: !!r.ok, error: r.err || '' };
   });

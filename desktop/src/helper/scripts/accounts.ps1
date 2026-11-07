@@ -130,5 +130,25 @@ switch ($Action) {
     Write-Output "ok"
   }
 
+  "teardown" {
+    # Fully undo the lockdown: give the daily account admin back, delete the
+    # sealed AppBlockerAdmin account, and wipe the sealed password + state.
+    $adminGroup = Get-AdminGroupName
+    # 1) Re-promote the daily account first, so deleting ours never leaves zero admins.
+    $target = $null
+    if ($DemoteSid -ne "") { try { $target = [System.Security.Principal.SecurityIdentifier]$DemoteSid } catch { $target = $null } }
+    if ($null -eq $target -and $DemoteUser -ne "") { $target = $DemoteUser }
+    if ($null -ne $target) { try { if (-not (Is-Member $adminGroup $target)) { Add-LocalGroupMember -Group $adminGroup -Member $target } } catch {} }
+    # 2) Delete the account we created.
+    if (Get-LocalUser -Name $Account -ErrorAction SilentlyContinue) { Remove-LocalUser -Name $Account -ErrorAction SilentlyContinue }
+    # 3) Remove the sealed password + state files.
+    if ($ConfigDir -ne "") {
+      try { Remove-Item -Path (Join-Path $ConfigDir "secure") -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+      try { Remove-Item -Path (Join-Path $ConfigDir "lockdown-state.json") -Force -ErrorAction SilentlyContinue } catch {}
+      try { Remove-Item -Path (Join-Path $ConfigDir "reveal.json") -Force -ErrorAction SilentlyContinue } catch {}
+    }
+    Write-Output "ok"
+  }
+
   default { throw "unknown action: $Action" }
 }

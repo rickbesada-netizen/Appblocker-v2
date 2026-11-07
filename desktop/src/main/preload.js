@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('api', {
   adminSetPw: (opts) => ipcRenderer.invoke('admin:setpw', opts),
   adminRestore: () => ipcRenderer.invoke('admin:restore'),
   adminRelock: () => ipcRenderer.invoke('admin:relock'),
+  adminTeardown: () => ipcRenderer.invoke('admin:teardown'),
   adminResult: (id) => ipcRenderer.invoke('admin:result', id),
 
   // First-run consent + standard-user setup
