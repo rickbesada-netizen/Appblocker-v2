@@ -573,6 +573,8 @@ if (gotLock) app.whenReady().then(() => {
       username: currentUser(),
       account: s.adminAccount || 'AppBlockerAdmin',
       done: !!s.adminLockdownDone,
+      // true after "Give my admin rights back": lockdown is paused until re-locked.
+      restored: !!s.adminRestored,
       helperAlive,
       strictOn,
       // reveal.json exists only while Strict is off (the helper maintains it).
@@ -615,6 +617,20 @@ if (gotLock) app.whenReady().then(() => {
     const id = 'pr-' + Date.now();
     const cmd = [{ id, type: 'promote', user: currentUser(), userSid: await currentUserSid() }];
     try { fs.writeFileSync(adminFile('admin-queue.json'), JSON.stringify(cmd)); } catch (e) { return { ok: false, error: String(e.message || e) }; }
+    s.adminRestored = true; store.set(s);
+    return { ok: true, id };
+  });
+
+  // Re-lock: remove this account's admin rights again, reusing the existing
+  // sealed admin account (no new password). Only while Strict is off.
+  ipcMain.handle('admin:relock', async () => {
+    if (process.platform !== 'win32') return { ok: false, error: 'Windows only' };
+    const s = store.get();
+    if (lock.isOn(s.strict)) return { ok: false, error: 'Turn Strict Mode off first.' };
+    const id = 'dm-' + Date.now();
+    const cmd = [{ id, type: 'demote', account: s.adminAccount || 'AppBlockerAdmin', demoteUser: currentUser(), demoteSid: await currentUserSid() }];
+    try { fs.writeFileSync(adminFile('admin-queue.json'), JSON.stringify(cmd)); } catch (e) { return { ok: false, error: String(e.message || e) }; }
+    s.adminRestored = false; store.set(s);
     return { ok: true, id };
   });
 

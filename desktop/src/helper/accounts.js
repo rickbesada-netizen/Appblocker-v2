@@ -74,6 +74,8 @@ async function tick(cfg, dir) {
       res = await run('setpw', ['-Account', cmd.account || 'AppBlockerAdmin', ...cfgArg], cmd.password);
     } else if (cmd.type === 'promote') {
       res = await run('promote', ['-User', cmd.user || '', '-DemoteSid', cmd.userSid || ''], null);
+    } else if (cmd.type === 'demote') {
+      res = await run('demote', ['-Account', cmd.account || 'AppBlockerAdmin', '-DemoteUser', cmd.demoteUser || '', '-DemoteSid', cmd.demoteSid || '', ...cfgArg], null);
     } else {
       res = { ok: false, err: 'unknown command: ' + cmd.type };
     }

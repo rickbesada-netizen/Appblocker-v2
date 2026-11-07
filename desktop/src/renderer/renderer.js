@@ -660,7 +660,7 @@ async function renderAdminLockdown(){
   const setup=$('adminLockSetup'), done=$('adminLockDone'), status=$('adminLockStatus');
   if(info.done){
     setup.style.display='none'; done.style.display='';
-    status.textContent = info.helperAlive ? '🔒 Admin lockdown is active on this PC.' : '🔒 Admin lockdown is set (protection service starting…).';
+    status.textContent = info.helperAlive ? '🔒 Admin lockdown is set up on this PC.' : '🔒 Admin lockdown is set (protection service starting…).';
     // Reveal availability
     const rt=$('adminRevealText');
     if(info.strictOn){ rt.textContent='🔒 Hidden while Strict Mode is on — turn Strict Mode off to see it.'; rt.style.color='#e5a53b'; }
@@ -763,8 +763,16 @@ if($('adminRestoreBtn')) $('adminRestoreBtn').onclick=async()=>{
   const r=await api.adminRestore();
   if(!r||!r.ok){ $('adminLockMsg').textContent=(r&&r.error)||'Turn Strict Mode off first.'; return; }
   pollAdminResult(r.id,(ok,err)=>{ $('adminLockMsg').textContent = ok
-    ? '✅ Your account has admin rights again. Sign out and back in, then you can uninstall from Settings › Apps.'
-    : ('⚠ '+(err||'Failed.')); });
+    ? '✅ Your account has admin rights again. Sign out and back in, then you can uninstall from Settings › Apps. (Use "Remove my admin rights again" below to re-lock.)'
+    : ('⚠ '+(err||'Failed.')); renderAdminLockdown(); });
+};
+if($('adminRelockBtn')) $('adminRelockBtn').onclick=async()=>{
+  $('adminLockMsg').textContent='Re-locking…';
+  const r=await api.adminRelock();
+  if(!r||!r.ok){ $('adminLockMsg').textContent=(r&&r.error)||'Turn Strict Mode off first.'; return; }
+  pollAdminResult(r.id,(ok,err)=>{ $('adminLockMsg').textContent = ok
+    ? '✅ Your account is a Standard user again — AppBlocker is locked down. Sign out and back in to finish applying it.'
+    : ('⚠ '+(err||'Failed.')); renderAdminLockdown(); });
 };
 renderAdminLockdown();
 

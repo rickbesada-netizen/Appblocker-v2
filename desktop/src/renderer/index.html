@@ -150,8 +150,12 @@
             <input id="adminOwnPw" type="text" placeholder="Type your own admin password (optional)" style="flex:1; min-width:220px" />
             <button id="adminOwnPwSave" class="btn-outline small">Set my own password</button>
           </div>
-          <p class="muted" style="margin-top:12px">Want to uninstall or do admin work? Turn Strict Mode off, then:</p>
-          <button id="adminRestoreBtn" class="btn-outline small">Give my account admin rights back</button>
+          <p class="muted" style="margin-top:12px">Want to uninstall or do admin work? Turn Strict Mode off, then give your
+            account admin rights back. When you're done, re-lock to remove them again:</p>
+          <div class="row" style="gap:8px; flex-wrap:wrap">
+            <button id="adminRestoreBtn" class="btn-outline small">Give my account admin rights back</button>
+            <button id="adminRelockBtn" class="btn-outline small">Remove my admin rights again (re-lock)</button>
+          </div>
           <p id="adminLockMsg" class="muted" style="margin-top:8px"></p>
         </div>
       </div>

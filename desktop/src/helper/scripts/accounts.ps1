@@ -111,5 +111,24 @@ switch ($Action) {
     Write-Output "ok"
   }
 
+  "demote" {
+    # Re-lock: remove the daily account from Administrators again, reusing the
+    # existing sealed admin (no new password). Never strand the PC with no admin.
+    $adminGroup = Get-AdminGroupName
+    if (-not (Get-LocalUser -Name $Account -ErrorAction SilentlyContinue)) { throw "sealed admin $Account is missing - run setup again" }
+    if (-not (Is-Member $adminGroup $Account)) { Add-LocalGroupMember -Group $adminGroup -Member $Account }
+    $target = $null
+    if ($DemoteSid -ne "") { try { $target = [System.Security.Principal.SecurityIdentifier]$DemoteSid } catch { $target = $null } }
+    if ($null -eq $target -and $DemoteUser -ne "") { $target = $DemoteUser }
+    if ($null -ne $target -and $DemoteUser -ne $Account) {
+      try { Remove-LocalGroupMember -Group $adminGroup -Member $target -ErrorAction Stop } catch {}
+    }
+    if ($ConfigDir -ne "") {
+      $state = @{ sealedAdmin = $Account; demotedUser = $DemoteUser; demotedSid = $DemoteSid } | ConvertTo-Json -Compress
+      Set-Content -Path (Join-Path $ConfigDir "lockdown-state.json") -Value $state -Encoding UTF8 -Force
+    }
+    Write-Output "ok"
+  }
+
   default { throw "unknown action: $Action" }
 }
