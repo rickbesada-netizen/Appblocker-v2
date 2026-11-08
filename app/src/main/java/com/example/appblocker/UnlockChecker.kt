@@ -49,7 +49,13 @@ object UnlockChecker {
                 if (!withinSchedule) {
                     UnlockCheckResult(UnlockMethod.FOLLOW_SCHEDULES, true, "You're outside your locked schedule")
                 } else {
-                    UnlockCheckResult(UnlockMethod.FOLLOW_SCHEDULES, false, "Locked until your schedule ends")
+                    // Include the exact time it unlocks, when we can work it out.
+                    val now = java.util.Calendar.getInstance()
+                    val end = StrictScheduleStore.getRanges(context, scope)
+                        .firstOrNull { it.contains(now) }?.endMillis(now)
+                    val msg = if (end != null) "Locked until ${ScheduleFormat.moment(end, System.currentTimeMillis())}"
+                              else "Locked until your schedule ends"
+                    UnlockCheckResult(UnlockMethod.FOLLOW_SCHEDULES, false, msg)
                 }
             )
         }

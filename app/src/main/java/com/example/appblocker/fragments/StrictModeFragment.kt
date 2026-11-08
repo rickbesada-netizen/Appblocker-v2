@@ -184,6 +184,7 @@ class StrictModeFragment : Fragment() {
                             if (when_ != null) "Your blockings are locked\n$when_" else "Your blockings are locked"
                     }
                     renderWeekly(it)
+                    renderSchedule(it)
                 }
                 handler.postDelayed(this, 1000)
             }
@@ -423,6 +424,56 @@ class StrictModeFragment : Fragment() {
         renderUnlockMethodSummary(view)
         renderLockedItems(view)
         renderTimer(view)
+        renderSchedule(view)
+    }
+
+    // Show the "Follow schedules" unlock schedule clearly: whether it's locked or
+    // open right now, the exact next unlock / next lock time, and each window.
+    private fun renderSchedule(view: View) {
+        val context = requireContext()
+        val tv = view.findViewById<TextView>(R.id.scheduleStatusText)
+        val selected = UnlockMethodStore.getSelectedMethods(context)
+        val ranges = com.example.appblocker.StrictScheduleStore.getRanges(context)
+        if (UnlockMethod.FOLLOW_SCHEDULES !in selected || ranges.isEmpty()) {
+            tv.visibility = View.GONE
+            return
+        }
+        val now = java.util.Calendar.getInstance()
+        val nowMs = System.currentTimeMillis()
+        val lines = StringBuilder()
+        val active = ranges.firstOrNull { it.contains(now) }
+        if (active != null) {
+            val end = active.endMillis(now)
+            lines.append(if (end != null) "🔒 Locked by schedule — unlocks ${ScheduleFormat.moment(end, nowMs)}"
+                         else "🔒 Locked by schedule (covers the whole week)")
+        } else {
+            val start = nextScheduleStart(ranges, now)
+            lines.append(if (start != null) "🔓 Open now — you can unlock. Next locks ${ScheduleFormat.moment(start, nowMs)}"
+                         else "🔓 Open now — you can unlock.")
+        }
+        lines.append("\n\nLocked times:")
+        for (r in ranges) lines.append("\n• ${ScheduleFormat.range(r)}")
+        tv.text = lines.toString()
+        tv.visibility = View.VISIBLE
+    }
+
+    // Soonest future moment any schedule window starts (when it next locks).
+    private fun nextScheduleStart(ranges: List<com.example.appblocker.TimeRange>, now: java.util.Calendar): Long? {
+        var best: Long? = null
+        for (r in ranges) {
+            if (r.days.isEmpty()) continue
+            for (off in 0..7) {
+                val c = (now.clone() as java.util.Calendar).apply { add(java.util.Calendar.DAY_OF_YEAR, off) }
+                if (c.get(java.util.Calendar.DAY_OF_WEEK) !in r.days) continue
+                val start = (c.clone() as java.util.Calendar).apply {
+                    set(java.util.Calendar.HOUR_OF_DAY, r.startMinutes / 60)
+                    set(java.util.Calendar.MINUTE, r.startMinutes % 60)
+                    set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                if (start > now.timeInMillis) { if (best == null || start < best!!) best = start; break }
+            }
+        }
+        return best
     }
 
     private fun renderUnlockMethodSummary(view: View) {
