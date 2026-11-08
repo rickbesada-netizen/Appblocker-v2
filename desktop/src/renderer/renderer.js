@@ -663,8 +663,8 @@ async function renderAdminLockdown(){
     status.textContent = info.helperAlive ? '🔒 Admin lockdown is set up on this PC.' : '🔒 Admin lockdown is set (protection service starting…).';
     // Reveal availability
     const rt=$('adminRevealText');
-    if(info.strictOn){ rt.textContent='🔒 Hidden while Strict Mode is on — turn Strict Mode off to see it.'; rt.style.color='#e5a53b'; }
-    else if(rt.dataset.shown!=='1'){ rt.textContent=''; }
+    if(info.strictOn){ rt.textContent='🔒 Hidden while Strict Mode is on — turn Strict Mode off to see it.'; rt.style.color='#e5a53b'; rt.dataset.shown='0'; if($('adminRevealBtn')) $('adminRevealBtn').textContent='Show the admin password'; }
+    else if(rt.dataset.shown!=='1'){ rt.textContent=''; if($('adminRevealBtn')) $('adminRevealBtn').textContent='Show the admin password'; }
   } else {
     setup.style.display=''; done.style.display='none';
     status.textContent = '';
@@ -743,12 +743,14 @@ function pollAdminResult(id, cb){
 
 // ----- Recovery actions (shown once lockdown is done) -----
 if($('adminRevealBtn')) $('adminRevealBtn').onclick=async()=>{
-  const rt=$('adminRevealText');
+  const rt=$('adminRevealText'), btn=$('adminRevealBtn');
+  // Toggle: if it's currently shown, hide it.
+  if(rt.dataset.shown==='1'){ rt.textContent=''; rt.dataset.shown='0'; btn.textContent='Show the admin password'; return; }
   let info; try{ info=await api.adminInfo(); }catch{}
   if(!info){ return; }
   if(info.strictOn){ rt.textContent='🔒 Hidden while Strict Mode is on — turn Strict Mode off to see it.'; rt.style.color='#e5a53b'; rt.dataset.shown='0'; return; }
-  if(info.revealable && info.pw){ rt.textContent='Admin account: '+info.account+'   Password: '+info.pw; rt.style.color='#36c17a'; rt.dataset.shown='1'; }
-  else { rt.textContent='Not available yet — the protection service may still be starting.'; rt.style.color='#9a9ab0'; }
+  if(info.revealable && info.pw){ rt.textContent='Admin account: '+info.account+'   Password: '+info.pw; rt.style.color='#36c17a'; rt.dataset.shown='1'; btn.textContent='Hide the admin password'; }
+  else { rt.textContent='Not available yet — the protection service may still be starting.'; rt.style.color='#9a9ab0'; rt.dataset.shown='0'; }
 };
 if($('adminOwnPwSave')) $('adminOwnPwSave').onclick=async()=>{
   const v=$('adminOwnPw').value.trim();
