@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -547,6 +547,30 @@ if (gotLock) app.whenReady().then(() => {
   const adminFile = (name) => path.join(configDir(), name);
   const readAdminJson = (name) => { try { return JSON.parse(fs.readFileSync(adminFile(name), 'utf8')); } catch (e) { return null; } };
   const currentUser = () => { try { return os.userInfo().username; } catch (e) { return ''; } };
+
+  // App-side backup copy of the admin password, so "Show" works even if the
+  // SYSTEM helper's reveal file isn't there. Encrypted with the OS keystore
+  // (DPAPI) when available; shown by the app only while Strict Mode is off.
+  const sealPwForApp = (s, password) => {
+    const p = String(password || '');
+    try {
+      if (p && safeStorage && safeStorage.isEncryptionAvailable()) {
+        s.adminPwEnc = safeStorage.encryptString(p).toString('base64');
+        delete s.adminPwPlain;
+        return;
+      }
+    } catch (e) {}
+    if (p) { s.adminPwPlain = p; delete s.adminPwEnc; }
+  };
+  const readAppPw = (s) => {
+    try {
+      if (s.adminPwEnc && safeStorage && safeStorage.isEncryptionAvailable()) {
+        return safeStorage.decryptString(Buffer.from(s.adminPwEnc, 'base64'));
+      }
+    } catch (e) {}
+    return s.adminPwPlain || '';
+  };
+  const clearAppPw = (s) => { delete s.adminPwEnc; delete s.adminPwPlain; };
   // The signed-in user's SID matches reliably even for Microsoft accounts,
   // where the bare username doesn't match the Administrators membership.
   const currentUserSid = () => new Promise((res) => {
@@ -568,6 +592,8 @@ if (gotLock) app.whenReady().then(() => {
     const helperAlive = !!(hb && hb.t && (Date.now() - hb.t < 15000));
     const reveal = readAdminJson('reveal.json');
     const strictOn = lock.isOn(s.strict);
+    // Prefer the app's own saved copy (reliable); fall back to the helper's file.
+    const pw = strictOn ? '' : (readAppPw(s) || ((reveal && reveal.password) ? reveal.password : ''));
     return {
       supported: true,
       username: currentUser(),
@@ -577,9 +603,8 @@ if (gotLock) app.whenReady().then(() => {
       restored: !!s.adminRestored,
       helperAlive,
       strictOn,
-      // reveal.json exists only while Strict is off (the helper maintains it).
-      revealable: !strictOn && !!(reveal && reveal.password),
-      pw: (!strictOn && reveal && reveal.password) ? reveal.password : ''
+      revealable: !strictOn && !!pw,
+      pw
     };
   });
 
@@ -593,7 +618,7 @@ if (gotLock) app.whenReady().then(() => {
     const id = 'ld-' + Date.now();
     const cmd = [{ id, type: 'lockdown', account: name, demoteUser: currentUser(), demoteSid: sid, password: String(password || '') }];
     try { fs.writeFileSync(adminFile('admin-queue.json'), JSON.stringify(cmd)); } catch (e) { return { ok: false, error: String(e.message || e) }; }
-    s.adminAccount = name; store.set(s); // "done" is set only once the helper confirms success
+    s.adminAccount = name; sealPwForApp(s, password); store.set(s); // "done" is set only once the helper confirms success
     return { ok: true, id };
   });
 
@@ -605,6 +630,8 @@ if (gotLock) app.whenReady().then(() => {
     const id = 'pw-' + Date.now();
     const cmd = [{ id, type: 'setpw', account: (account || s.adminAccount || 'AppBlockerAdmin').trim(), password: String(password || '') }];
     try { fs.writeFileSync(adminFile('admin-queue.json'), JSON.stringify(cmd)); } catch (e) { return { ok: false, error: String(e.message || e) }; }
+    // Save the app-side backup too, so Show works right away regardless of the helper.
+    sealPwForApp(s, password); store.set(s);
     return { ok: true, id };
   });
 
@@ -657,7 +684,7 @@ if (gotLock) app.whenReady().then(() => {
     }
     // Teardown confirmed: the account is gone, so the card returns to setup.
     if (r.ok && typeof r.id === 'string' && r.id.indexOf('td-') === 0) {
-      const s = store.get(); s.adminLockdownDone = false; s.adminRestored = false; store.set(s);
+      const s = store.get(); s.adminLockdownDone = false; s.adminRestored = false; clearAppPw(s); store.set(s);
     }
     return { pending: false, ok: !!r.ok, error: r.err || '' };
   });
