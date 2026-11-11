@@ -10,6 +10,7 @@ function defaults() {
     adultFilter: false,   // adult-site block via hosts (system-wide)
     adultStrict: defaultLock(),   // adult/web filter's OWN Strict Mode
     webFilter: { enabled: false, allowedSites: [] }, // browser allow-list (enforced by the extension)
+    appFilter: { enabled: false, allowedApps: [] },  // app allow-list: close every app except these
     strict: defaultLock(),        // the big (global) Strict Mode, now method-based
     launchOnStartup: true,
     // Close browsers that can bypass web blocking (no extension / can't run it)

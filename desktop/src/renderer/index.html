@@ -55,6 +55,21 @@
           <p class="muted" id="webHint"></p>
         </div>
       </div>
+
+      <div class="card">
+        <label class="switch-row"><span>App allow-list (close every app except allowed ones)</span>
+          <input id="appToggle" type="checkbox" /></label>
+        <p class="muted">While this is on, any app you open that isn't on the list below is closed on sight. Windows
+          itself, the desktop, and AppBlocker stay running. Add the program's executable name, one per line
+          (e.g. <b>word.exe</b>, <b>chrome.exe</b>) — tip: right-click a running app in Task Manager → "Go to details"
+          to see its exact name.</p>
+        <div id="appBox">
+          <label class="field"><span>Allowed apps (one executable per line)</span>
+            <textarea id="allowedApps" rows="5" placeholder="chrome.exe&#10;word.exe&#10;excel.exe"></textarea></label>
+          <button id="saveAllowedApps" class="btn-outline small">Save allowed apps</button>
+          <p class="muted" id="appHint"></p>
+        </div>
+      </div>
     </section>
 
     <!-- Strict -->

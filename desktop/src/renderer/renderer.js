@@ -3,7 +3,7 @@ if (window.__appblockerInit) return;
 window.__appblockerInit = true;
 
 const api = window.api;
-let state = { lists: [], strict: {}, adultStrict: {}, webFilter: {} };
+let state = { lists: [], strict: {}, adultStrict: {}, webFilter: {}, appFilter: {} };
 let editing = null;      // list being edited (a copy)
 let editorSnapshot = ''; // form state when the editor opened / last saved
 let globalCfg = null;    // renderer-held unlock config for the global strict
@@ -554,6 +554,13 @@ function renderFilter(){
   $('webHint').textContent = wf.enabled
     ? 'On: only the sites above can be opened. Install the AppBlocker extension in Chrome/Edge (see README).'
     : 'Off: all browsing allowed.';
+
+  const af=state.appFilter||{enabled:false, allowedApps:[]};
+  $('appToggle').checked=!!af.enabled;
+  if(document.activeElement!==$('allowedApps')) $('allowedApps').value=(af.allowedApps||[]).join('\n');
+  $('appHint').textContent = af.enabled
+    ? 'On: only the apps above can run — everything else is closed on sight (AppBlocker must stay open).'
+    : 'Off: apps run normally (only your block lists apply).';
 }
 $('adultToggle').onchange=async(e)=>{ const r=await api.setAdultFilter(e.target.checked); if(r.error){alert(r.error);e.target.checked=!e.target.checked;} else state=r; renderFilter(); };
 $('webToggle').onchange=async(e)=>{
@@ -566,6 +573,19 @@ $('saveAllowed').onclick=async()=>{
   const sites=$('allowedSites').value.split('\n').map(s=>s.trim()).filter(Boolean);
   const wf=state.webFilter||{};
   const r=await api.setWebFilter(wf.enabled, sites);
+  if(r.error){ alert(r.error); } else { state=r; renderFilter(); }
+};
+$('appToggle').onchange=async(e)=>{
+  if(e.target.checked && !confirm('Turn on the app allow-list? Every app NOT on your list will be closed immediately. Make sure the apps you need are listed first.')){ e.target.checked=false; return; }
+  const list=$('allowedApps').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const r=await api.setAppFilter(e.target.checked, list);
+  if(r.error){ alert(r.error); e.target.checked=!e.target.checked; } else state=r;
+  renderFilter();
+};
+$('saveAllowedApps').onclick=async()=>{
+  const list=$('allowedApps').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const af=state.appFilter||{};
+  const r=await api.setAppFilter(af.enabled, list);
   if(r.error){ alert(r.error); } else { state=r; renderFilter(); }
 };
 

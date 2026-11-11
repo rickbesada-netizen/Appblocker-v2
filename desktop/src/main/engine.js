@@ -77,6 +77,10 @@ class Engine {
     const appNames = [];
     for (const l of active) for (const a of (l.apps || [])) appNames.push(a);
     await apps.enforce(appNames);
+
+    // App allow-list: when on, close everything except the allowed apps.
+    const af = this.store.get().appFilter;
+    if (af && af.enabled) await apps.enforceAllowOnly(af.allowedApps || []);
   }
 
   // Called when blocking is fully turned off (nothing locked and the app quits).

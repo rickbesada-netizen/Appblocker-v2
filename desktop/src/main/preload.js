@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Web allow-list filter
   setWebFilter: (enabled, allowedSites) => ipcRenderer.invoke('webfilter:set', { enabled, allowedSites }),
+  setAppFilter: (enabled, allowedApps) => ipcRenderer.invoke('appfilter:set', { enabled, allowedApps }),
 
   setStartup: (on) => ipcRenderer.invoke('settings:startup', on),
   setEnforcement: (on) => ipcRenderer.invoke('settings:enforcement', on),

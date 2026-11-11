@@ -479,6 +479,26 @@ if (gotLock) app.whenReady().then(() => {
     return store.get();
   });
 
+  // ----- App allow-list (close every app except the allowed ones) -----
+  ipcMain.handle('appfilter:set', (_e, { enabled, allowedApps }) => {
+    const s = store.get();
+    const locked = lock.isOn(s.strict);
+    const cur = s.appFilter || { enabled: false, allowedApps: [] };
+    if (locked) {
+      // Add-only while locked: can't turn off, can't newly allow more apps.
+      if (enabled === false && cur.enabled) return { error: 'Locked by Strict Mode - turn it off first (Strict Mode tab).' };
+      const curSet = new Set(cur.allowedApps || []);
+      const added = (allowedApps || []).some(x => !curSet.has(x));
+      if (added) return { error: 'Locked: you can remove allowed apps, but not add new ones' };
+    }
+    s.appFilter = {
+      enabled: enabled === undefined ? cur.enabled : !!enabled,
+      allowedApps: allowedApps === undefined ? (cur.allowedApps || []) : allowedApps
+    };
+    store.set(s);
+    return store.get();
+  });
+
   // Drive encryption (BitLocker) — detect + guide only.
   ipcMain.handle('bitlocker:get', () => new Promise(res => bitlocker.status(res)));
   ipcMain.handle('bitlocker:open', () => { bitlocker.openSettings(); return true; });
