@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, shell, saf
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const https = require('https');
 const { configDir } = require('../shared/paths');
 const { Store } = require('./store');
 const { Engine } = require('./engine');
@@ -557,6 +558,68 @@ if (gotLock) app.whenReady().then(() => {
   ipcMain.handle('cloud:setkeys', (_e, { url, anonKey }) => {
     const s = store.get(); s.cloudUrl = (url || '').trim(); s.cloudAnonKey = (anonKey || '').trim(); store.set(s);
     return { ok: true, restart: true };
+  });
+
+  // ----- In-app updater -----
+  // Compares the build number stamped at build time against version.json on the
+  // "windows-latest" release. Installing is BLOCKED while any lock is on, so the
+  // updater can never be used to swap in a tampered build to bypass Strict Mode.
+  const UPDATE_BASE = 'https://github.com/rickbesada-netizen/Appblocker-v2/releases/download/windows-latest';
+  const currentBuildInfo = () => {
+    try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'build-info.json'), 'utf8')); }
+    catch (e) { return { build: 0, version: app.getVersion() }; }
+  };
+  const httpsGet = (url, redirects = 0) => new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': 'AppBlocker' } }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects < 6) {
+        res.resume(); return resolve(httpsGet(res.headers.location, redirects + 1));
+      }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
+      const chunks = []; res.on('data', (d) => chunks.push(d)); res.on('end', () => resolve(Buffer.concat(chunks)));
+    }).on('error', reject);
+  });
+  const downloadTo = (url, dest, redirects = 0) => new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': 'AppBlocker' } }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects < 6) {
+        res.resume(); return resolve(downloadTo(res.headers.location, dest, redirects + 1));
+      }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
+      const f = fs.createWriteStream(dest);
+      res.pipe(f); f.on('finish', () => f.close(() => resolve(dest))); f.on('error', reject);
+    }).on('error', reject);
+  });
+
+  ipcMain.handle('update:version', () => {
+    const b = currentBuildInfo();
+    return { version: b.version || app.getVersion(), build: b.build || 0 };
+  });
+
+  ipcMain.handle('update:check', async () => {
+    const cur = currentBuildInfo();
+    try {
+      const data = JSON.parse((await httpsGet(UPDATE_BASE + '/version.json')).toString('utf8'));
+      const latest = Number(data.build) || 0;
+      return { current: Number(cur.build) || 0, latest, updateAvailable: latest > (Number(cur.build) || 0), strictOn: anyLockOn() };
+    } catch (e) {
+      return { current: Number(cur.build) || 0, latest: null, error: 'Could not reach the update server (no internet?).', strictOn: anyLockOn() };
+    }
+  });
+
+  ipcMain.handle('update:install', async () => {
+    if (process.platform !== 'win32') return { error: 'Windows only' };
+    // Hard gate: no updating while anything is locked - keeps this from being a
+    // way around Strict Mode.
+    if (anyLockOn()) return { error: 'Turn Strict Mode off first (Strict Mode tab), then update.' };
+    try {
+      const data = JSON.parse((await httpsGet(UPDATE_BASE + '/version.json')).toString('utf8'));
+      const exe = data.exe || 'AppBlocker-Setup-' + (data.version || app.getVersion()) + '.exe';
+      const dest = path.join(os.tmpdir(), 'AppBlocker-Update.exe');
+      await downloadTo(UPDATE_BASE + '/' + exe, dest);
+      app.isQuitting = true;
+      await shell.openPath(dest);           // runs the installer (UAC prompts)
+      setTimeout(() => app.quit(), 1500);   // quit so it can replace the files
+      return { ok: true };
+    } catch (e) { return { error: String(e.message || e) }; }
   });
 
   // ----- Admin lockdown (Option A) -----

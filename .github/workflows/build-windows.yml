@@ -33,6 +33,16 @@ jobs:
         working-directory: desktop
         run: npm install --no-audit --no-fund
 
+      - name: Stamp build number (for the in-app updater)
+        working-directory: desktop
+        shell: bash
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          printf '{"build": %s, "time": "%s", "version": "%s", "exe": "AppBlocker-Setup-%s.exe"}\n' \
+            "${{ github.run_number }}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$VER" "$VER" > src/main/build-info.json
+          cp src/main/build-info.json "$GITHUB_WORKSPACE/version.json"
+          cat src/main/build-info.json
+
       - name: Build the installer
         id: build
         working-directory: desktop
@@ -58,7 +68,9 @@ jobs:
           tag_name: windows-latest
           name: Windows installer (latest)
           prerelease: true
-          files: desktop/dist/*.exe
+          files: |
+            desktop/dist/*.exe
+            version.json
 
       - name: Publish build log to "windows-ci-log" (on failure)
         if: failure()

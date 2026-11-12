@@ -34,6 +34,11 @@ contextBridge.exposeInMainWorld('api', {
   setWebFilter: (enabled, allowedSites) => ipcRenderer.invoke('webfilter:set', { enabled, allowedSites }),
   setAppFilter: (enabled, allowedApps) => ipcRenderer.invoke('appfilter:set', { enabled, allowedApps }),
 
+  // Updates
+  updateVersion: () => ipcRenderer.invoke('update:version'),
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+
   setStartup: (on) => ipcRenderer.invoke('settings:startup', on),
   setEnforcement: (on) => ipcRenderer.invoke('settings:enforcement', on),
   setExtensionEnabled: (on) => ipcRenderer.invoke('extension:setEnabled', on),

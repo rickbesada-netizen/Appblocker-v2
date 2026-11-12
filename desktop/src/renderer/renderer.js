@@ -589,6 +589,40 @@ $('saveAllowedApps').onclick=async()=>{
   if(r.error){ alert(r.error); } else { state=r; renderFilter(); }
 };
 
+// ---- Updates ----
+async function renderVersion(){
+  if(!api.updateVersion || !$('verText')) return;
+  try{ const v=await api.updateVersion(); $('verText').textContent = (v.version||'')+' (build '+(v.build||0)+')'; }catch{}
+}
+async function doCheckUpdate(silent){
+  if(!api.checkUpdate) return;
+  const hint=$('updateHint'), ib=$('installUpdateBtn');
+  if(!silent && hint) hint.textContent='Checking…';
+  let r; try{ r=await api.checkUpdate(); }catch{ r=null; }
+  if(!r){ if(hint) hint.textContent='Could not check for updates.'; return; }
+  if(r.error){ if(hint && !silent) hint.textContent=r.error; return; }
+  if(r.updateAvailable){
+    if(ib) ib.style.display = r.strictOn ? 'none' : '';
+    if(hint) hint.textContent = r.strictOn
+      ? '🔔 An update is available — turn Strict Mode off (Strict Mode tab) to install it.'
+      : '🔔 An update is available. Click "Update now".';
+  } else {
+    if(ib) ib.style.display='none';
+    if(hint && !silent) hint.textContent='✅ You\'re on the latest version.';
+    else if(hint) hint.textContent='';
+  }
+}
+if($('checkUpdateBtn')) $('checkUpdateBtn').onclick=()=>doCheckUpdate(false);
+if($('installUpdateBtn')) $('installUpdateBtn').onclick=async()=>{
+  if(!confirm('Download and install the latest AppBlocker now? The app will close while it updates.')) return;
+  $('updateHint').textContent='Downloading update…';
+  const r=await api.installUpdate();
+  if(r && r.error){ $('updateHint').textContent='⚠ '+r.error; }
+  else { $('updateHint').textContent='Installer launched — follow the prompts.'; }
+};
+renderVersion();
+doCheckUpdate(true);
+
 // ---- Settings ----
 $('startupToggle').onchange=async(e)=>{ const r=await api.setStartup(e.target.checked); if(r&&r.error){ alert(r.error); e.target.checked=!e.target.checked; } else state=r; };
 
