@@ -59,7 +59,10 @@ const WIN_ESSENTIALS = new Set([
   'services.exe', 'lsass.exe', 'svchost.exe', 'smss.exe', 'conhost.exe', 'dllhost.exe', 'taskmgr.exe',
   'lockapp.exe', 'logonui.exe', 'userinit.exe', 'spoolsv.exe', 'audiodg.exe', 'wmiprvse.exe',
   'backgroundtaskhost.exe', 'securityhealthsystray.exe', 'msedgewebview2.exe',
-  'appblocker.exe', 'appblocker-helper.exe', 'node.exe', 'electron.exe'
+  'appblocker.exe', 'appblocker-helper.exe', 'node.exe', 'electron.exe',
+  // Trickster (antidetect browser) force-loads the same AppBlocker extension and
+  // enforces the allow-list itself, so the app allow-list never closes it.
+  'trickster.exe'
 ]);
 const MAC_ESSENTIALS = new Set([
   'finder', 'dock', 'systemuiserver', 'windowserver', 'loginwindow', 'controlcenter', 'notificationcenter',

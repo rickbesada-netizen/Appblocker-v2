@@ -42,6 +42,13 @@ function idOf(b) {
 // Browser ids that have proven the extension can run there (so re-closing fast is safe).
 const seenFreshIds = new Set();
 
+// NOTE on Trickster (the antidetect browser): it bundles and force-loads the
+// SAME AppBlocker extension, enforces it with its own tamper monitor, and that
+// extension reads the allow-list from our local server (127.0.0.1:47113) - so
+// Trickster is already in sync. It is deliberately in NEITHER list below, so we
+// never close it: it protects itself, and closing it would kill the user's
+// antidetect profiles mid-session.
+
 // Protectable = Chromium-based browsers that CAN run the companion extension
 // (so they're left alone while the extension is alive). Unprotectable = can't
 // run it, so they're closed whenever web blocking is active.
