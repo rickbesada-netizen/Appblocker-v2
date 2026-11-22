@@ -84,6 +84,16 @@ class AppBlockAccessibilityService : AccessibilityService() {
             "deactivate device admin"
         )
 
+        // The system "install / uninstall this app?" screens. Installing or
+        // removing ANY app goes through these, so they must stay usable - we only
+        // ever close them when the screen names AppBlocker itself (its own
+        // uninstall), handled in checkTamper.
+        private val INSTALLER_PACKAGES = setOf(
+            "com.android.packageinstaller", "com.google.android.packageinstaller",
+            "com.samsung.android.packageinstaller", "com.miui.packageinstaller",
+            "com.oplus.packageinstaller", "com.coloros.packageinstaller", "com.vivo.packageinstaller"
+        )
+
         // Apps where AppBlocker could be force-stopped, uninstalled or have
         // its permissions removed.
         private val TAMPER_PACKAGES = setOf(
@@ -390,6 +400,10 @@ class AppBlockAccessibilityService : AccessibilityService() {
             kickOut("AppBlocker's settings are locked by Strict Mode")
             return
         }
+        // The reset / device-admin wording checks are for Settings screens only.
+        // Don't run them on the install/uninstall prompt, or installing or
+        // removing an ordinary app could be mistaken for a reset and closed.
+        if (pkg in INSTALLER_PACKAGES) return
         // Block the factory-reset / erase-all screen while Strict Mode is on.
         if (isResetScreen(root)) {
             kickOut("Factory reset is blocked by Strict Mode")
@@ -512,6 +526,10 @@ class AppBlockAccessibilityService : AccessibilityService() {
         val context = applicationContext
         if (pkg == packageName) return
         if (isSystemAllowed(pkg)) return
+        // Installing or uninstalling another app must never be interrupted.
+        // (AppBlocker's own uninstall is still caught in checkTamper, because
+        // that screen shows the AppBlocker name.)
+        if (pkg in INSTALLER_PACKAGES) { BlockOverlayManager.hide(context); return }
 
         val decision = BlockEngine.decisionForApp(context, pkg)
         if (decision != null) {
