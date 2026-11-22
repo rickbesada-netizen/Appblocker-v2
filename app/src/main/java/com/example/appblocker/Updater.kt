@@ -43,7 +43,7 @@ object Updater {
             readTimeout = 60000
             setRequestProperty("User-Agent", "AppBlocker")
         }
-        conn.inputStream.use { input -> out.outputStream.use { output -> input.copyTo(output) } }
+        conn.inputStream.use { input -> out.outputStream().use { output -> input.copyTo(output) } }
         if (out.length() > 0) out else null
     } catch (e: Exception) {
         null
