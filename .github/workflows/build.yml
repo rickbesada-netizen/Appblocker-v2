@@ -36,6 +36,8 @@ jobs:
           gradle-version: "8.9"
 
       - name: Build debug APK
+        env:
+          APPBLOCKER_BUILD: ${{ github.run_number }}
         run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Publish to the "latest" release
@@ -43,9 +45,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk AppBlocker.apk
+          printf '{"build": %s}\n' "${{ github.run_number }}" > version.json
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest AppBlocker.apk \
+          gh release create latest AppBlocker.apk version.json \
             --target "$GITHUB_SHA" \
             --title "Latest build $(date -u +'%Y-%m-%d %H:%M') UTC" \
-            --notes "Built from commit ${GITHUB_SHA::7}" \
+            --notes "Built from commit ${GITHUB_SHA::7} (build ${{ github.run_number }})" \
             --prerelease

@@ -3,6 +3,7 @@ package com.example.appblocker.fragments
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
@@ -25,9 +26,13 @@ import com.example.appblocker.R
 import com.example.appblocker.AppCloser
 import com.example.appblocker.SplitLauncherActivity
 import com.example.appblocker.StrictModeStore
+import com.example.appblocker.Updater
 import com.example.appblocker.cloud.CloudSync
 import com.example.appblocker.cloud.DeviceRow
+import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -111,6 +116,63 @@ class ProfileFragment : Fragment() {
                 SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date(info.firstInstallTime))
         } catch (e: PackageManager.NameNotFoundException) {
             // leave blank
+        }
+
+        setupUpdates(view)
+    }
+
+    // ---- In-app updater ----
+    private var downloadedUpdate: java.io.File? = null
+
+    private fun setupUpdates(view: View) {
+        val btn = view.findViewById<MaterialButton>(R.id.checkUpdateBtn)
+        btn.setOnClickListener { checkForUpdate(view, manual = true) }
+        checkForUpdate(view, manual = false) // quiet auto-check on open
+    }
+
+    private fun checkForUpdate(view: View, manual: Boolean) {
+        val status = view.findViewById<TextView>(R.id.updateStatus)
+        val btn = view.findViewById<MaterialButton>(R.id.checkUpdateBtn)
+        if (manual) status.text = "Checking…"
+        lifecycleScope.launch {
+            val r = withContext(Dispatchers.IO) { Updater.check() }
+            if (!isAdded) return@launch
+            when {
+                r == null -> if (manual) status.text = "Couldn't check for updates (no internet?)."
+                r.available -> {
+                    status.text = "🔔 Update available. Tap Update now."
+                    btn.text = "Update now"
+                    btn.setOnClickListener { downloadAndInstall(view) }
+                }
+                else -> {
+                    if (manual) status.text = "You're on the latest version." else status.text = ""
+                    btn.text = "Check for updates"
+                    btn.setOnClickListener { checkForUpdate(view, manual = true) }
+                }
+            }
+        }
+    }
+
+    private fun downloadAndInstall(view: View) {
+        val context = requireContext()
+        val status = view.findViewById<TextView>(R.id.updateStatus)
+        // Android needs "install unknown apps" allowed for AppBlocker first.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+            status.text = "Allow AppBlocker to install apps, then tap Update now again."
+            runCatching {
+                startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
+            }
+            return
+        }
+        status.text = "Downloading update…"
+        lifecycleScope.launch {
+            val apk = withContext(Dispatchers.IO) { Updater.downloadApk(context) }
+            if (!isAdded) return@launch
+            if (apk == null) { status.text = "Download failed — try again."; return@launch }
+            downloadedUpdate = apk
+            status.text = "Opening installer — tap Install."
+            runCatching { Updater.install(context, apk) }
+                .onFailure { status.text = "Couldn't open the installer." }
         }
     }
 

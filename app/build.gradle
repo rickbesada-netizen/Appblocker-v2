@@ -12,8 +12,14 @@ android {
         applicationId "com.example.appblocker"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        // Build number from CI (GitHub run_number) so the in-app updater can tell
+        // when a newer build is available. Defaults to 1 for local builds.
+        versionCode((System.getenv("APPBLOCKER_BUILD") ?: "1").toInteger())
+        versionName "1.0." + (System.getenv("APPBLOCKER_BUILD") ?: "0")
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     // Fixed debug key so every cloud build can install over the previous one
