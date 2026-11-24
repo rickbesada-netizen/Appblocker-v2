@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
+import com.example.appblocker.DeviceOwner
 import com.example.appblocker.R
 import com.example.appblocker.ScheduleFormat
 import com.example.appblocker.SelectOptionsActivity
@@ -260,6 +261,7 @@ class StrictModeFragment : Fragment() {
         if (!StrictModeStore.isActive(context)) {
             StrictModeStore.setActive(context, true)
             UnlockMethodStore.recordActivatedNow(context)
+            DeviceOwner.sync(context)   // engage OS-level locks if device owner
             renderState(view)
             return
         }
@@ -366,6 +368,7 @@ class StrictModeFragment : Fragment() {
     private fun finalizeDeactivate(view: View) {
         val context = requireContext()
         StrictModeStore.setActive(context, false)
+        DeviceOwner.sync(context)   // release OS-level locks when Strict Mode ends
         UnlockMethodStore.clearCooldown(context)
         pinVerifiedForThisAttempt = false
         view.findViewById<MaterialButton>(R.id.toggleStrictModeButton).isEnabled = true

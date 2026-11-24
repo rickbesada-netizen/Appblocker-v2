@@ -504,6 +504,9 @@ class AppBlockAccessibilityService : AccessibilityService() {
 
     private fun onTick() {
         val now = System.currentTimeMillis()
+        // Keep the OS-level Device Owner locks in step with Strict Mode. No-op
+        // unless this app was provisioned as device owner; cheap and idempotent.
+        DeviceOwner.sync(applicationContext)
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         if (!power.isInteractive) return
         UsageTracker.tick(applicationContext, now)

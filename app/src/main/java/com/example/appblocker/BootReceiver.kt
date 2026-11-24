@@ -12,6 +12,9 @@ class BootReceiver : BroadcastReceiver() {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             "android.intent.action.QUICKBOOT_POWERON" -> {
+                // Reassert the OS-level Device Owner locks to match Strict Mode
+                // (no-op unless provisioned as device owner).
+                DeviceOwner.sync(context)
                 if (StartupGuard.isNeeded(context)) StartupGuard.show(context)
             }
         }

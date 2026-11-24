@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.appblocker.AppSettings
+import com.example.appblocker.DeviceOwner
 import com.example.appblocker.PermissionUtils
 import com.example.appblocker.R
 import com.example.appblocker.AppCloser
@@ -119,6 +120,92 @@ class ProfileFragment : Fragment() {
         }
 
         setupUpdates(view)
+        setupDeviceOwner(view)
+    }
+
+    // ---- Device lock (Device Owner) ----
+    private fun setupDeviceOwner(view: View) {
+        view.findViewById<MaterialButton>(R.id.deviceOwnerBtn)
+            .setOnClickListener { onDeviceOwnerTapped(view) }
+        renderDeviceOwner(view)
+    }
+
+    private fun renderDeviceOwner(view: View) {
+        val context = requireContext()
+        val status = view.findViewById<TextView>(R.id.deviceOwnerStatus)
+        val btn = view.findViewById<MaterialButton>(R.id.deviceOwnerBtn)
+        status.text = DeviceOwner.statusLine(context)
+        btn.text = when {
+            !DeviceOwner.isDeviceOwner(context) -> "Set up device lock"
+            StrictModeStore.isActive(context) -> "How the lock works"
+            else -> "Remove device lock"
+        }
+    }
+
+    private fun onDeviceOwnerTapped(view: View) {
+        val context = requireContext()
+        when {
+            !DeviceOwner.isDeviceOwner(context) -> showDeviceOwnerSetup()
+            StrictModeStore.isActive(context) ->
+                AlertDialog.Builder(context)
+                    .setTitle("Device lock is active")
+                    .setMessage(
+                        "While Strict Mode is on, Android blocks AppBlocker's Uninstall, " +
+                            "factory reset and Safe Mode.\n\nTurn Strict Mode off first if you " +
+                            "ever need to remove the lock."
+                    )
+                    .setPositiveButton("OK", null)
+                    .show()
+            else -> AlertDialog.Builder(context)
+                .setTitle("Remove device lock?")
+                .setMessage(
+                    "This gives up AppBlocker's device-owner protection. Uninstall and " +
+                        "factory reset will work normally again. You'd need to redo the one-time " +
+                        "USB setup to re-enable it."
+                )
+                .setNegativeButton("Keep it", null)
+                .setPositiveButton("Remove") { _, _ ->
+                    val ok = DeviceOwner.relinquish(context)
+                    Toast.makeText(
+                        context,
+                        if (ok) "Device lock removed." else "Couldn't remove — is Strict Mode off?",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    renderDeviceOwner(view)
+                }
+                .show()
+        }
+    }
+
+    private fun showDeviceOwnerSetup() {
+        val cmd = "adb shell dpm set-device-owner " +
+            "com.example.appblocker/.BlockerDeviceAdminReceiver"
+        val steps =
+            "This is a one-time setup over USB. It only works on a device with no " +
+                "Google/Samsung accounts added yet.\n\n" +
+                "1. Remove all accounts: Settings → Accounts → remove each one.\n" +
+                "2. On a computer, install \"adb\" (Android Platform Tools).\n" +
+                "3. On the phone: Settings → About phone → tap Build number 7× to unlock " +
+                "Developer options, then Settings → Developer options → turn on USB debugging.\n" +
+                "4. Plug the phone into the computer and accept the \"Allow USB debugging\" prompt.\n" +
+                "5. Run this command on the computer:\n\n$cmd\n\n" +
+                "6. You'll see \"Success: Device owner set\". Re-add your accounts.\n\n" +
+                "After that, AppBlocker blocks uninstall, factory reset and Safe Mode automatically " +
+                "whenever Strict Mode is on — and lifts them when Strict Mode is off.\n\n" +
+                "Note: a factory reset from the phone's hardware recovery menu still wipes the " +
+                "device — no app can stop that."
+        AlertDialog.Builder(requireContext())
+            .setTitle("Set up device lock")
+            .setMessage(steps)
+            .setPositiveButton("Copy command") { _, _ ->
+                val clip = requireContext()
+                    .getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
+                clip.setPrimaryClip(android.content.ClipData.newPlainText("adb", cmd))
+                Toast.makeText(requireContext(), "Command copied.", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     // ---- In-app updater ----
@@ -178,7 +265,7 @@ class ProfileFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        view?.let { render(it) }
+        view?.let { render(it); renderDeviceOwner(it) }
     }
 
     private fun render(view: View) {

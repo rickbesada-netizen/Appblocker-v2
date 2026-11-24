@@ -186,6 +186,7 @@ object CloudSync {
                     "strict_on" -> StrictModeStore.setActive(appContext, true)
                     "lock_all" -> { BlockListStore.enableAll(appContext); StrictModeStore.setActive(appContext, true) }
                 }
+                com.example.appblocker.DeviceOwner.sync(appContext)
                 runCatching {
                     client.from("commands").update(buildJsonObject { put("consumed", true) }) {
                         filter { eq("id", c.id) }
